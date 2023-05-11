@@ -1,8 +1,10 @@
 from src import *
 
 class Restaurant():
-  def __init__(self,x,y,type='mid',randseed=322):
-    seed(randseed)
+
+  def __init__(self,x,y,type='mid',randseed=0):
+    if randseed != 0:
+      seed(randseed)
     self.x = x
     self.y = y
     self.type = type
@@ -22,11 +24,13 @@ class Restaurant():
     #   case 'night':
     #     print('night')
 
+
   def produce(self, time):
     orders_size = self.hourly_orders[int(time.minute/DELTA_MINUTES)]
     self.active_orders += orders_size
     self.hour_order_count += orders_size
-    return [Order(randint(0,GRID_SIZE-1), randint(0,GRID_SIZE-1)) for _ in range(orders_size)]
+    return [Order(randint(0,GRID_SIZE-1), randint(0,GRID_SIZE-1), time) for _ in range(orders_size)]
+
 
   def get_mean_sd(self, time):
     match time.hour:
@@ -44,6 +48,7 @@ class Restaurant():
       case 22: m = 2; sd = 0.75
     return m, sd
 
+
   def build_prediction(self, time):
     self.hour_order_count = 0
     mean, sd = self.get_mean_sd(time)
@@ -54,6 +59,7 @@ class Restaurant():
     self.hourly_orders = np.zeros(HOUR_LAPSES, dtype=int)
     for _ in range(orders_size):
       self.hourly_orders[randint(0,HOUR_LAPSES-1)] += 1
+
 
   def expected_orders(self, time, expected_max_deviation=0.8):
     time = nextStamp(time)
