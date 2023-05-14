@@ -2,18 +2,22 @@ from src import *
 
 class Courier():
 
-    def __init__(self,x,y,time):
-        self.x = x
-        self.y = y
-        self.time = time
+    def __init__(self,pos,cluster_id):
+        self.pos = np.array(pos)
+        self.state = "to_cluster"
+        self.with_order = False
+        self.cluster_id = cluster_id
+        self.debt_time = 0
 
-    # AQUI
-    def closest_cluster(self):
-        self.g = 2
+    def assign_order(self, order):
+        self.order = order
+        self.state = "to_restaurant"
 
-    def go_to(self, x, y):
-        d_x = np.abs(x - self.x)
-        d_y = np.abs(y - self.y)
-        d = np.sqrt(d_x**2 + d_y**2)
-        if d <= DELTA_MINUTES*10:
-            self.closest_cluster
+    def display_info(self):
+        print("Position:", self.pos)
+        print("State:", self.state)
+        if self.order is not None:
+            print("Order Info:")
+            self.order.display_info()
+        else:
+            print("Cluster ID:", self.cluster_id)

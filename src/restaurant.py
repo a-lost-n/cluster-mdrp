@@ -2,13 +2,14 @@ from src import *
 
 class Restaurant():
 
-  def __init__(self,x,y,type='mid',randseed=0):
+  def __init__(self,id,grid_size,type='mid',randseed=0):
+    self.id = id
     if randseed != 0:
       seed(randseed)
-    self.x = x
-    self.y = y
+    self.grid_size = grid_size
+    self.pos = np.array([randint(0,grid_size),randint(0,grid_size)])
     self.type = type
-    self.active_orders = 0
+    self.active_orders = []
     match type:
       case 'low':
         self.mult_m = 0.5
@@ -27,9 +28,10 @@ class Restaurant():
 
   def produce(self, time):
     orders_size = self.hourly_orders[int(time.minute/DELTA_MINUTES)]
-    self.active_orders += orders_size
+    orders = [Order([randint(0,self.grid_size-1), randint(0,self.grid_size-1)], self.id, time) for _ in range(orders_size)]
+    self.active_orders.extend(orders)
     self.hour_order_count += orders_size
-    return [Order(randint(0,GRID_SIZE-1), randint(0,GRID_SIZE-1), time) for _ in range(orders_size)]
+    return orders
 
 
   def get_mean_sd(self, time):
@@ -68,4 +70,4 @@ class Restaurant():
     sd *= self.mult_sd
     z_value = norm.ppf((expected_max_deviation+1)/2)
     return max(int((mean + z_value * sd - self.hour_order_count)/(HOUR_LAPSES - time.minute/DELTA_MINUTES) + 0.5), 0)
-    # return (mean + z_value * sd - self.hour_order_count)/(HOUR_LAPSES - time.minute/DELTA_MINUTES)
+

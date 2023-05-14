@@ -5,6 +5,11 @@ def nextStamp(tm, next_val=DELTA_MINUTES):
     fulldate = fulldate + datetime.timedelta(minutes=next_val)
     return fulldate.time()
 
+def calculateDelay(actual_time, extra_time, goal_time):
+   full_actual = datetime.datetime(1,1,1,actual_time.hour,actual_time.minute,actual_time.second)
+   full_goal = datetime.datetime(1,1,1,goal_time.hour,goal_time.minute,goal_time.second)
+   extra_time = datetime.timedelta(seconds=int(extra_time*60))
+   return ((full_goal - full_actual) - extra_time).total_seconds()
 
 def optimal_kmeans_dist(x, min_members=3, start=1, epochs=5):
   opt_model = (None, None, np.inf)
