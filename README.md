@@ -1,1 +1,2 @@
-# cluster-mdrp
+# Algoritmo de Optimización de Flota sobre Clusters de Restaurantes (EN DESARROLLO)
+La finalidad del projecto es de reducir el tamaño de la flota de couriers de reparto de comida para que los trabajadores puedan mejorar su ganancia y reducir el tiempo de inactividad que el trabajo tiene por defecto. Para esto se ha hecho un algoritmo de Q-Learning, que se encarga de definir el tamaño de la flota y la distribución de ella a lo largo del mapa. Para poder simplificar mejor el problema, se usa un algoritmo de clustering que agrupa los restaurantes a lo largo del mapa, para tener puntos óptimos de espera para los couriers con mayor cobertura de restaurantes.
