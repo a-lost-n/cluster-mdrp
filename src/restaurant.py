@@ -63,6 +63,10 @@ class Restaurant():
       self.hourly_orders[randint(0,HOUR_LAPSES-1)] += 1
 
 
+  def reset(self):
+    del self.active_orders[:]
+
+  # @DeprecationWarning("Ya no se usa probabilistica del estado")
   def expected_orders(self, time, expected_max_deviation=0.8):
     time = nextStamp(time)
     mean, sd = self.get_mean_sd(time)

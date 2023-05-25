@@ -1,5 +1,5 @@
 from src import *
-from src.restaurant import Restaurant
+
 
 class Cluster():
   
@@ -8,7 +8,9 @@ class Cluster():
     self.restaurants = restaurant_list
     self.centroid = centroid
     self.active_orders = []
+    #TODO: Debería ser un priority queue
     self.courier_list = []
+    self.incoming_couriers = []
   
   def produce(self, time):
     for restaurant in self.restaurants:
@@ -19,8 +21,15 @@ class Cluster():
     for restaurant in self.restaurants:
       restaurant.build_prediction(time)
 
-  def assign_next_courier(self) -> Courier:
-    courier = self.courier_list.pop(0)
+  def get_next_courier(self):
+    if len(self.courier_list) == 0:
+      return -1
+    return self.courier_list.pop(0)
+  
+  def assign_next_courier(self):
+    if len(self.active_orders) == 0 or len(self.courier_list) == 0:
+      return -1
+    courier = self.get_next_courier()
     order = self.active_orders.pop(0)
     courier.assign_order(order)
     return courier
@@ -28,16 +37,25 @@ class Cluster():
   def queue_courier(self, courier):
     self.courier_list.append(courier)
 
-  def invoke_courier(self):
-    self.courier_list.append(Courier(pos=self.centroid,cluster_id=self.id))
+  def reset(self):
+    for restaurant in self.restaurants:
+      restaurant.reset()
+    del self.courier_list[:]
+    del self.active_orders[:]
+    del self.incoming_couriers[:]
 
   """
-  Hay 3 estados:
-  0: Hay un exceso de couriers en el cluster con respecto a la probabilidad de pedidos en el siguiente diferencial de tiempo.
-  1: Puede haber la probabilidad de falta de couriers en el siguiente diferencial de tiempo.
-  2: Hay un falta de couriers en este instante.
+  Hay 2 estados:
+  0: Hay un exceso de couriers con respecto a las ordenes pendientes.
+  1: Hay un falta de couriers con respecto a las ordenes pendientes.
   """
-  def set_state(self):
-    next_expected = 0
-    for restaurant in self.restaurants:
-      next_expected += restaurant.expected_orders()
+  def get_state(self):
+    if len(self.active_orders) <= len(self.courier_list) + len(self.incoming_couriers):
+      return 0
+    else:
+      return 1
+
+
+  # @DeprecationWarning("La invocación se realiza desde el mapa")
+  def invoke_courier(self):
+    self.courier_list.append(Courier(pos=self.centroid, courier_id=0,cluster_id=self.id))

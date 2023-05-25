@@ -2,12 +2,14 @@ from src import *
 
 class Courier():
 
-    def __init__(self,pos,cluster_id):
+    def __init__(self,pos, courier_id, cluster_id):
+        self.id = courier_id
         self.pos = np.array(pos)
-        self.state = "to_cluster"
+        self.state = "in_cluster"
         self.with_order = False
         self.cluster_id = cluster_id
         self.debt_time = 0
+        self.to_cluster = None
 
     def assign_order(self, order):
         self.order = order
