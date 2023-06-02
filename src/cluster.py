@@ -32,10 +32,31 @@ class Cluster():
     courier = self.get_next_courier()
     order = self.active_orders.pop(0)
     courier.assign_order(order)
-    return courier
+    # return courier
   
+  def assign_all_orders(self):
+    while len(self.active_orders) > 0 and len(self.courier_list) > 0:
+      self.assign_next_courier()
+
+  def drop_expired_orders(self, time):
+    reward = 0
+    for order in self.active_orders:
+      if nextStamp(order.order_time, TIME_TO_DROPOUT_ORDER) >= time:
+        reward += COST_DROPOUT
+    return reward
+
   def queue_courier(self, courier):
     self.courier_list.append(courier)
+
+  def set_incoming(self, courier):
+    self.incoming_couriers.append(courier)
+
+  def move_to_queue(self, courier):
+    for i in range(len(self.incoming_couriers)):
+      if self.incoming_couriers[i].id == courier.id:
+        self.incoming_couriers.pop(i)
+        self.queue_courier(courier)
+        return
 
   def reset(self):
     for restaurant in self.restaurants:

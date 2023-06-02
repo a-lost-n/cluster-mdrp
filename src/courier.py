@@ -8,8 +8,8 @@ class Courier():
         self.state = "in_cluster"
         self.with_order = False
         self.cluster_id = cluster_id
-        self.debt_time = 0
-        self.to_cluster = None
+        self.wait_time = 0
+        self.relocation = None
 
     def assign_order(self, order):
         self.order = order

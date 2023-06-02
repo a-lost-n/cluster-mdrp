@@ -89,62 +89,54 @@ class Map():
 
     def move_courier(self, courier_id, time, movement=MOVEMENT):
         courier = self.get_courier(courier_id)
-        if movement > courier.debt_time:
-            movement -= courier.debt_time
-            courier.debt_time = 0
-        else:
-            courier.debt_time -= movement
-            return 0
         match courier.state:
             case "to_restaurant":
                 courier.cluster_id = None
                 restaurant = self.restaurants[courier.order.restaurant_id]
                 dist = np.linalg.norm(courier.pos - restaurant.pos)
-
                 # Si la distancia es mayor de lo que nos movemos nos quedamos a mitad de camino
                 if dist > movement:
                     courier.pos = courier.pos + (restaurant.pos - courier.pos) * (dist - movement)/dist
-
+                    return 0
                 # Si la distancia es menor y aún no llega la orden se espera
                 else:
                     courier.pos = restaurant.pos
                     courier.state = "to_wait_restaurant"
-
-                    # Si la distancia es menor y ya está la orden ir de inmediato al destino
-                    if courier.order.on_time_restaurant <= time:
-                        return self.move_courier(courier, time, movement=float(movement)-dist)
-                return 0
+                    courier.wait_time = EXPECTED_ATTENDING_RESTAURANT
+                    return self.move_courier(courier, nextStamp(time, dist/SPEED), movement=float(movement)-dist)
 
             case "to_wait_restaurant":
                 if courier.order.on_time_restaurant <= time:
+                    if courier.wait_time > movement/SPEED:
+                        courier.wait_time -= movement/SPEED
+                        return 0
+                    courier.wait_time = 0
                     courier.state = "to_destination"
                     courier.with_order = True
-                    if movement <= EXPECTED_ATTENDING_RESTAURANT:
-                        courier.debt_time = EXPECTED_ATTENDING_RESTAURANT - movement
-                    else:
-                        return self.move_courier(courier=courier, time=time, movement=float(movement)-EXPECTED_ATTENDING_RESTAURANT)
+                    return self.move_courier(courier=courier, time=time, movement=movement-courier.wait_time*SPEED)
                 return 0
 
             case "to_destination":
                 dist = np.linalg.norm(courier.pos - courier.order.destination_pos)
                 if dist > movement:
                     courier.pos = courier.pos + (courier.order.destination_pos - courier.pos) * (dist - movement)/dist
+                    return 0
                 else:
                     courier.pos = courier.order.destination_pos
                     courier.state = "to_wait_destination"
-                    delay = calculateDelay(time, dist, courier.order.on_time_destination)
-                    return -max(delay, 0)
-                return 0
+                    courier.wait_time = EXPECTED_ATTENDING_DESTINATION
+                    delay = calculateDelay(time, courier.order.on_time_destination, extra_time=dist/SPEED)
+                    return min(delay, 0) + self.move_courier(courier=courier, time=time, movement=float(movement)-dist)
 
             case "to_wait_destination":
+                if courier.wait_time > movement/SPEED:
+                    courier.wait_time -= movement/SPEED
+                    return 0
                 courier.state = "to_cluster"
                 courier.with_order = False
                 courier.cluster_id = self.closest_cluster(courier.pos)
-                if movement <= EXPECTED_ATTENDING_DESTINATION:
-                    courier.debt_time = EXPECTED_ATTENDING_DESTINATION - movement
-                else:
-                    return self.move_courier(courier=courier, time=time, movement=float(movement)-EXPECTED_ATTENDING_DESTINATION)
-                return 0
+                self.clusters[courier.cluster_id].set_incoming(courier)
+                return self.move_courier(courier=courier, time=time, movement=movement-courier.wait_time*SPEED)
             
             case "to_cluster":
                 cent = self.centroids[courier.cluster_id]
@@ -154,7 +146,8 @@ class Map():
                     courier.pos = courier.pos + (cent - courier.pos) * (dist - movement)/dist
                 else:
                     courier.pos = cent
-                    self.clusters[courier.cluster_id].queue_courier(courier)
+                    self.clusters[courier.cluster_id].move_to_queue(courier)
+                    courier.state = "in_cluster"
                 return 0
             
             case "in_cluster":
@@ -168,8 +161,6 @@ class Map():
                 else:
                     courier.pos = new_cluster.centroid
                     courier.state = "in_cluster"
-                    courier.debt_time = movement - dist
-                    # return -(dist + self.move_courier(courier))
                 return 0
 
 
@@ -209,9 +200,11 @@ class Map():
 
     def pass_time(self):
         reward = 0
+        for cluster in self.clusters:
+            reward += cluster.drop_expired_orders(self.time)
+            cluster.assign_all_orders()
         for courier in self.couriers:
             reward += self.move_courier(courier.id, self.time)
-            # print(reward)
         self.time = nextStamp(self.time)
         if self.time.minute == 0 and self.time.hour != 22:
             self.build_prediction()
@@ -229,6 +222,7 @@ class Map():
         courier = from_cluster.get_next_courier()
         courier.state = "relocating"
         courier.relocation = to_cluster.id
+        to_cluster.set_incoming(courier)
         return -np.linalg.norm(courier.pos - to_cluster.centroid)
         
 

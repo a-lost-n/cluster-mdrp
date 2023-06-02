@@ -9,9 +9,6 @@ class QTable():
         self.n_states = 2**self.n_clusters
         self.n_actions = self.n_clusters**2 + 1
         self.qtable = np.zeros((self.n_states, self.n_actions))
-        # for actions in self.qtable:
-        #     actions[-1] = 1
-
     
     def get_next_state(self):
         state_array = self.map.get_state()
@@ -35,6 +32,7 @@ class QTable():
             
         else:
             reward, done = self.map.pass_time()
+            # print(reward)
             self.map.produce()
 
         new_state = self.get_next_state()
@@ -48,17 +46,16 @@ class QTable():
     
 
     def train(self, episodes=10, alpha=0.5, gamma=0.9):
+        reward_change = []
         for ep in range(episodes):
             state = self.reset()
             finished = False
+            total_reward = 0
             print("EP:",ep)
             while not finished:
 
                 discarded_empty = self.discard_empty_clusters()
                 non_empty_actions = [self.qtable[state][i] for i in discarded_empty]
-
-                # print(discarded_empty)
-                # return
 
                 if np.argmin(self.qtable[state]) == 0:
                     action = discarded_empty[randint(0, len(discarded_empty)-1)]
@@ -66,14 +63,21 @@ class QTable():
                     action = discarded_empty[np.argmax(non_empty_actions)]
                 
                 new_state, reward, finished = self.step(action)
+                total_reward += reward
 
-                print("S:",state,"A:", action,"R:", reward, "NS:", new_state)
-                # print(self.n_states)
+                # print("S:",state,"A:", action,"R:", reward, "NS:", new_state)
+
                 self.qtable[state][action] = self.qtable[state][action] +\
                       alpha * (reward + gamma * np.max(self.qtable[new_state]) - self.qtable[state][action])
-
+                
                 state = new_state
+            
+            reward_change.append(total_reward)
+            # print(self.qtable)
+        return reward_change
 
+    def print_qtable(self):
+        print(self.qtable)
 
     def discard_empty_clusters(self):
         state_actions = []
