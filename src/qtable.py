@@ -7,7 +7,7 @@ class QTable():
         self.map = map
         self.n_clusters = len(map.clusters)
         self.n_states = 2**self.n_clusters
-        self.n_actions = self.n_clusters**2 + 1
+        self.n_actions = self.n_clusters**2
         self.qtable = np.zeros((self.n_states, self.n_actions))
     
     def get_next_state(self):
@@ -30,10 +30,9 @@ class QTable():
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
             reward = self.map.invoke_courier(cluster_id)
             
-        else:
-            reward, done = self.map.pass_time()
-            # print(reward)
-            self.map.produce()
+        # else:
+        #     reward, done = self.map.pass_time()
+        #     self.map.produce()
 
         new_state = self.get_next_state()
         return new_state, reward, done
@@ -42,7 +41,7 @@ class QTable():
     def reset(self):
         self.map.reset()
         self.map.build_prediction()
-        return 0
+        return self.get_next_state()
     
 
     def train(self, episodes=10, alpha=0.5, gamma=0.9):
@@ -53,28 +52,37 @@ class QTable():
             total_reward = 0
             print("EP:",ep)
             while not finished:
+                if state == 0:
+                    reward, finished = self.map.pass_time()
+                    new_state = self.get_next_state()
+                    self.map.produce()
 
-                discarded_empty = self.discard_empty_clusters()
-                non_empty_actions = [self.qtable[state][i] for i in discarded_empty]
-
-                if np.argmin(self.qtable[state]) == 0:
-                    action = discarded_empty[randint(0, len(discarded_empty)-1)]
                 else:
-                    action = discarded_empty[np.argmax(non_empty_actions)]
-                
-                new_state, reward, finished = self.step(action)
-                total_reward += reward
+                    discarded_empty = self.discard_empty_clusters()
+                    non_empty_actions = [self.qtable[state][i] for i in discarded_empty]
 
-                # print("S:",state,"A:", action,"R:", reward, "NS:", new_state)
+                    if np.argmin(self.qtable[state]) == 0:
+                        action = discarded_empty[randint(0, len(discarded_empty)-1)]
+                    else:
+                        action = discarded_empty[np.argmax(non_empty_actions)]
+                    
+                    new_state, reward, finished = self.step(action)
+                    
+                    total_reward += reward
 
-                self.qtable[state][action] = self.qtable[state][action] +\
-                      alpha * (reward + gamma * np.max(self.qtable[new_state]) - self.qtable[state][action])
+                    print("State: {}, Action: {}, Reward: {}".format(state,action,reward))
+
+                    # self.reward_function(reward,state,action,new_state,alpha,gamma)
+                    self.qtable[state][action] = self.qtable[state][action] +\
+                        alpha * (reward + gamma * np.max(self.qtable[new_state]) - self.qtable[state][action])    
                 
                 state = new_state
             
             reward_change.append(total_reward)
-            # print(self.qtable)
         return reward_change
+
+    def reward_function(self, reward, state, action, new_state, alpha, gamma):
+        self.qtable[state][action] += alpha * (reward + gamma * np.max(self.qtable[new_state]) - self.qtable[state][action])    
 
     def print_qtable(self):
         print(self.qtable)
@@ -90,5 +98,5 @@ class QTable():
         for _ in range(len(empty_clusters)):
             state_actions.append(i)
             i += 1
-        state_actions.append(i)
+        # state_actions.append(i)
         return state_actions

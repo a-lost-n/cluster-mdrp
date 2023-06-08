@@ -103,7 +103,7 @@ class Map():
                     courier.pos = restaurant.pos
                     courier.state = "to_wait_restaurant"
                     courier.wait_time = EXPECTED_ATTENDING_RESTAURANT
-                    return self.move_courier(courier, nextStamp(time, dist/SPEED), movement=float(movement)-dist)
+                    return self.move_courier(courier_id=courier_id, time=nextStamp(time, dist/SPEED), movement=float(movement)-dist)
 
             case "to_wait_restaurant":
                 if courier.order.on_time_restaurant <= time:
@@ -113,7 +113,7 @@ class Map():
                     courier.wait_time = 0
                     courier.state = "to_destination"
                     courier.with_order = True
-                    return self.move_courier(courier=courier, time=time, movement=movement-courier.wait_time*SPEED)
+                    return self.move_courier(courier_id=courier_id, time=time, movement=movement-courier.wait_time*SPEED)
                 return 0
 
             case "to_destination":
@@ -126,7 +126,7 @@ class Map():
                     courier.state = "to_wait_destination"
                     courier.wait_time = EXPECTED_ATTENDING_DESTINATION
                     delay = calculateDelay(time, courier.order.on_time_destination, extra_time=dist/SPEED)
-                    return min(delay, 0) + self.move_courier(courier=courier, time=time, movement=float(movement)-dist)
+                    return min(delay, 0) + self.move_courier(courier_id=courier_id, time=time, movement=float(movement)-dist)
 
             case "to_wait_destination":
                 if courier.wait_time > movement/SPEED:
@@ -136,7 +136,7 @@ class Map():
                 courier.with_order = False
                 courier.cluster_id = self.closest_cluster(courier.pos)
                 self.clusters[courier.cluster_id].set_incoming(courier)
-                return self.move_courier(courier=courier, time=time, movement=movement-courier.wait_time*SPEED)
+                return self.move_courier(courier_id=courier_id, time=time, movement=movement-courier.wait_time*SPEED)
             
             case "to_cluster":
                 cent = self.centroids[courier.cluster_id]
