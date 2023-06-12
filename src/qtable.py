@@ -35,6 +35,7 @@ class QTable():
         #     self.map.produce()
 
         new_state = self.get_next_state()
+        done = new_state == 0
         return new_state, reward, done
 
     
@@ -44,41 +45,52 @@ class QTable():
         return self.get_next_state()
     
 
-    def train(self, episodes=10, alpha=0.5, gamma=0.9):
+    def train(self, episodes=10, alpha=0.5, gamma=0.9, epsilon = 1, epsilon_change=0.5):
         reward_change = []
+        epsilon_decay = 1/(episodes*epsilon_change)
         for ep in range(episodes):
             state = self.reset()
-            finished = False
             total_reward = 0
+            done = False
             print("EP:",ep)
-            while not finished:
-                if state == 0:
-                    reward, finished = self.map.pass_time()
-                    new_state = self.get_next_state()
-                    self.map.produce()
+            while not done:
+                accumulated_reward = 0
+                finished = False
+                while not finished:
 
-                else:
+                    rnd = np.random.random()
+
                     discarded_empty = self.discard_empty_clusters()
                     non_empty_actions = [self.qtable[state][i] for i in discarded_empty]
 
-                    if np.argmin(self.qtable[state]) == 0:
+                    if rnd < epsilon or np.argmin(self.qtable[state]) == 0:
                         action = discarded_empty[randint(0, len(discarded_empty)-1)]
                     else:
                         action = discarded_empty[np.argmax(non_empty_actions)]
                     
                     new_state, reward, finished = self.step(action)
                     
-                    total_reward += reward
+                    accumulated_reward += reward
 
-                    print("State: {}, Action: {}, Reward: {}".format(state,action,reward))
+                    if not finished: 
+                        reward = reward
+                    else: 
+                        reward = accumulated_reward
 
-                    # self.reward_function(reward,state,action,new_state,alpha,gamma)
+                    # print("State: {}, Action: {}, Reward: {}".format(state,action,reward))
+
                     self.qtable[state][action] = self.qtable[state][action] +\
                         alpha * (reward + gamma * np.max(self.qtable[new_state]) - self.qtable[state][action])    
+                    
+                    state = new_state
+
+                reward, done = self.map.pass_time()
+                state = self.get_next_state()
+                self.map.produce()
+                total_reward += accumulated_reward
                 
-                state = new_state
-            
             reward_change.append(total_reward)
+            epsilon -= epsilon_decay
         return reward_change
 
     def reward_function(self, reward, state, action, new_state, alpha, gamma):
