@@ -39,11 +39,21 @@ class Map():
         del self.couriers[:]
         for cluster in self.clusters:
             cluster.reset()
+
     
-    def get_state(self):
+    def get_state(self, algorithm='DDQN'):
         state_array = []
-        for cluster in self.clusters:
-            state_array.append(cluster.get_state())
+        if algorithm == 'DDQN':
+            done = True
+            for cluster in self.clusters:
+                cluster_state = cluster.get_state(algorithm=algorithm) 
+                state_array.extend(cluster_state)
+                done = done and (cluster_state[0] < 1)
+            state_array.extend([self.time.hour])
+            return np.array(state_array), done
+        else:
+            for cluster in self.clusters:
+                state_array.append(cluster.get_state(algorithm=algorithm))
         return state_array
 
     def invoke_courier(self, cluster_id):

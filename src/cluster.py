@@ -70,11 +70,14 @@ class Cluster():
   0: Hay un exceso de couriers con respecto a las ordenes pendientes.
   1: Hay un falta de couriers con respecto a las ordenes pendientes.
   """
-  def get_state(self):
-    if len(self.active_orders) <= len(self.courier_list) + len(self.incoming_couriers):
-      return 0
+  def get_state(self, algorithm='DDQN'):
+    if algorithm == 'DDQN':
+        return [len(self.courier_list), len(self.active_orders), len(self.incoming_couriers)]
     else:
-      return 1
+      if len(self.active_orders) <= len(self.courier_list) + len(self.incoming_couriers):
+        return 0
+      else:
+        return 1
 
 
   # @DeprecationWarning("La invocación se realiza desde el mapa")
