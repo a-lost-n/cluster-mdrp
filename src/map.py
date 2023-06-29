@@ -48,7 +48,7 @@ class Map():
             for cluster in self.clusters:
                 cluster_state = cluster.get_state(algorithm=algorithm) 
                 state_array.extend(cluster_state)
-                done = done and (cluster_state[0] < 1)
+                done = done and (cluster_state[1] <= cluster_state[0] + cluster_state[2])
             state_array.extend([self.time.hour])
             return np.array(state_array), done
         else:

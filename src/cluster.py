@@ -58,6 +58,10 @@ class Cluster():
         self.queue_courier(courier)
         return
 
+  def can_relocate(self):
+    return len(self.courier_list) > 0
+
+
   def reset(self):
     for restaurant in self.restaurants:
       restaurant.reset()
