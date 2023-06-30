@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import time
 import tensorflow as tf
 from collections import deque
 from tensorflow.keras.models import Sequential
@@ -7,19 +8,17 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-tf.config.threading.set_inter_op_parallelism_threads(6)
+tf.config.threading.set_inter_op_parallelism_threads(8)
 
 class DDQNAgent:
     def __init__(self, map):
         self.map = map
         self.n_clusters = len(map.clusters)
-        self.state_size = 3*self.n_clusters + 1
+        self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=1024)
-        self.gamma = 0.01  # discount rate
-        self.epsilon = 1.0  # exploration rate
+        self.memory = deque(maxlen=256)
+        self.gamma = 0.8
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.985
         self.learning_rate = 0.001
         self.model = self._build_model()
         self.target_model = self._build_model()
@@ -28,6 +27,7 @@ class DDQNAgent:
         model = Sequential()
         model.add(Dense(24, input_dim=self.state_size, activation='relu'))
         model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
         model.add(Dense(self.action_size, activation='linear'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
@@ -35,8 +35,8 @@ class DDQNAgent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state):
-        if np.random.rand() <= self.epsilon:
+    def act(self, state, epsilon):
+        if np.random.rand() <= epsilon:
             return random.randrange(self.action_size)
         act_values = self.model.predict(state, verbose=0)
         return np.argmax(act_values[0])
@@ -72,7 +72,7 @@ class DDQNAgent:
             if self.map.clusters[performer].can_relocate():
                 reward = self.map.relocate_courier(performer,reciever)
             else:
-                reward = COST_INVOCATION
+                reward = -10
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
@@ -85,36 +85,50 @@ class DDQNAgent:
         new_state, done = self.map.get_state()
         return new_state, reward, done
 
-    def train(self, episodes=1000):
+    def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
-        batch_size = 16
         for e in range(episodes):
             finished = False
             accumulated_reward = 0
-            memories_collected = 0
+            total_actions = 0
             uses = 0
             state = self.reset()[0]
+            count = 0
             while not finished:
+                start_time = time.time()
                 state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
                 uses += 1 if not done else 0
+                run_actions = 0
+                run_rewards = 0
                 while not done:
-                    action = self.act(state)
+                    action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
                     next_state = np.reshape(next_state, [1, self.state_size])
                     self.remember(state, action, reward, next_state, done)
                     state = next_state
-                    memories_collected += 1
-                    accumulated_reward += reward
+                    run_actions += 1
+                    run_rewards += reward
+
 
                 _, finished = self.map.pass_time()
+                self.replay(batch_size)
+                if count % 24 == 0:
+                    self.update_target_model()
+                    print(np.reshape(state, (self.state_size,1)).tolist())
+                print("uses: {}, actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
+                      .format(uses, run_actions, run_rewards, epsilon, time.time() - start_time))
+                total_actions += run_actions
+                accumulated_reward += run_rewards
+                count += 1
+
+
             print("episode: {}/{}, score: {:.2f}, e: {:.2f}, mems: {}, uses: {}, act/use: {:.2f}"
-                            .format(e, episodes, accumulated_reward, self.epsilon, memories_collected, uses, memories_collected/uses))
-            self.replay(batch_size)
+                            .format(e+1, episodes, accumulated_reward, epsilon, total_actions, uses, total_actions/uses))
+            if epsilon > self.epsilon_min:
+                epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
-            if self.epsilon > self.epsilon_min:
-                self.epsilon *= self.epsilon_decay
-            self.update_target_model()
+            
         return reward_history
 
     def test(self):
@@ -126,7 +140,7 @@ class DDQNAgent:
             state = np.reshape(state, [1, self.state_size])
             while not done:
                 print("[STATE]: ", np.reshape(state, (self.state_size, 1)).tolist())
-                action = self.act(state)
+                action = self.act(state, epsilon=0)
                 next_state, reward, done = self.step(action, verbose=True)
                 next_state = np.reshape(next_state, [1, self.state_size])
                 state = next_state

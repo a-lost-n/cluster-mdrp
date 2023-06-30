@@ -49,7 +49,7 @@ class Map():
                 cluster_state = cluster.get_state(algorithm=algorithm) 
                 state_array.extend(cluster_state)
                 done = done and (cluster_state[1] <= cluster_state[0] + cluster_state[2])
-            state_array.extend([self.time.hour])
+            # state_array.extend([self.time.hour])
             return np.array(state_array), done
         else:
             for cluster in self.clusters:
@@ -170,6 +170,7 @@ class Map():
                     courier.pos = courier.pos + (new_cluster.centroid - courier.pos) * (dist - movement)/dist
                 else:
                     courier.pos = new_cluster.centroid
+                    new_cluster.move_to_queue(courier)
                     courier.state = "in_cluster"
                 return 0
 
