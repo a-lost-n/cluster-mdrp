@@ -35,19 +35,18 @@ class Restaurant():
 
 
   def get_mean_sd(self, time):
-    match time.hour:
-      case 11: m = 3; sd = 1
-      case 12: m = 9; sd = 2
-      case 13: m = 8; sd = 1.5
-      case 14: m = 5; sd = 1.5
-      case 15: m = 4; sd = 1.5
-      case 16: m = 4; sd = 1
-      case 17: m = 6; sd = 2
-      case 18: m = 6; sd = 2
-      case 19: m = 5; sd = 1.5
-      case 20: m = 4; sd = 1
-      case 21: m = 3; sd = 1 
-      case 22: m = 2; sd = 0.75
+    if time.hour == 11: m = 3; sd = 1
+    elif time.hour == 12: m = 9; sd = 2
+    elif time.hour == 13: m = 8; sd = 1.5
+    elif time.hour == 14: m = 5; sd = 1.5
+    elif time.hour == 15: m = 4; sd = 1.5
+    elif time.hour == 16: m = 4; sd = 1
+    elif time.hour == 17: m = 6; sd = 2
+    elif time.hour == 18: m = 6; sd = 2
+    elif time.hour == 19: m = 5; sd = 1.5
+    elif time.hour == 20: m = 4; sd = 1
+    elif time.hour == 21: m = 3; sd = 1 
+    elif time.hour == 22: m = 2; sd = 0.75
     return m, sd
 
 
