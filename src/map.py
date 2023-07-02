@@ -4,7 +4,7 @@ class Map():
 
     # El arreglo va a ser de tamaño 3 y va a tener la siguiente forma:
     # [high, mid, low] donde cada número es la cantidad de restaurantes en el mapa
-    def __init__(self, restaurant_array, grid_size, randseed=0, start=1, epochs=1000, start_time = datetime.time(11,0,0)):
+    def __init__(self, restaurant_array, grid_size, labels=None, centroids=None, randseed=0, start=1, epochs=1000, start_time = datetime.time(11,0,0)):
         if randseed != 0:
             seed(randseed)
         self.clusters = []
@@ -14,16 +14,34 @@ class Map():
         self.resTypes = ['high', 'mid', 'low']
         self.time = start_time
         self.start_time = start_time
-        for resNum, resType in zip(restaurant_array,self.resTypes):
-            for _ in range(resNum):
-                self.restaurants.append(Restaurant(id=len(self.restaurants),
-                                                   grid_size=grid_size,
-                                                   type=resType,
-                                                   randseed=randint(1,10000)))
-                self.restaurants_tags.append(resType)
-        self.restaurants = np.array(self.restaurants)
-        self.init_clusters(start=start, epochs=epochs)
+        if labels is None or centroids is None:
+            for resNum, resType in zip(restaurant_array,self.resTypes):
+                for _ in range(resNum):
+                    self.restaurants.append(Restaurant(id=len(self.restaurants),
+                                                    grid_size=grid_size,
+                                                    type=resType,
+                                                    randseed=randint(1,10000)))
+                    self.restaurants_tags.append(resType)
+            self.restaurants = np.array(self.restaurants)
+            self.init_clusters(start=start, epochs=epochs)
+        else:
+            for i in range(self.centroids.shape[0]):
+                self.clusters.append(Cluster(self.restaurants[labels == i], centroids[i], id=i))
     
+    def __init__(self, clusters, couriers, restaurants, restaurants_tags, time, start_time):
+        self.clusters = clusters
+        self.couriers = couriers
+        self.restaurants = restaurants
+        self.restaurants_tags = restaurants_tags
+        self.resTypes = ['high', 'mid', 'low']
+        self.time = time
+        self.start_time = start_time
+
+
+    def copy(self):
+        return Map(self.clusters, self.couriers, self.restaurants, self.time, self.start_time)
+
+
 
     def init_clusters(self, start, epochs):
         res_positions = []
