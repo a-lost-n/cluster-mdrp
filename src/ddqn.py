@@ -16,7 +16,7 @@ class DDQNAgent:
         self.n_clusters = len(map.clusters)
         self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=1028)
+        self.memory = deque(maxlen=1024)
         self.gamma = 0.8
         self.epsilon_min = 0.01
         self.learning_rate = 0.001
@@ -26,9 +26,9 @@ class DDQNAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(36, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(36, activation='relu'))
-        model.add(Dense(36, activation='relu'))
+        model.add(Dense(self.state_size*8, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(self.state_size*6, activation='relu'))
+        model.add(Dense(self.state_size*4, activation='relu'))
         model.add(Dense(self.action_size, activation='sigmoid'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
@@ -78,14 +78,14 @@ class DDQNAgent:
             if self.map.clusters[performer].can_relocate():
                 reward = self.map.relocate_courier(performer,reciever)
             else:
-                reward = COST_INVOCATION
+                reward = COST_INVOCATION*5
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
             if verbose:
-                print("[ACTION]: C_{}++".format(cluster_id))
+                print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
             reward = self.map.invoke_courier(cluster_id)
 
         new_state, done = self.map.get_state()
@@ -104,9 +104,9 @@ class DDQNAgent:
                 continue
             state = np.reshape(state, [1, self.state_size])
             # uses += 1 if not done else 0
-            run_actions = 0
-            run_rewards = 0
             for e in range(episodes):
+                run_actions = 0
+                run_rewards = 0
                 # accumulated_reward = 0
                 # total_actions = 0
                 # uses = 0
@@ -124,11 +124,16 @@ class DDQNAgent:
 
                 # _, finished = self.map.pass_time()
                 self.replay(batch_size)
-                if e % 50 == 0:
+                if e%10 == 0:
                     self.update_target_model()
+                if e % (episodes/10) == 0:
                     print(np.reshape(state, (self.state_size,1)).tolist())
                     print("actions: {}, reward: {:.2f}, e: {:.3f}".format(run_actions, run_rewards, epsilon))
-                self.map = map_copy
+                self.map = map_copy.copy()
+                state, done = self.map.get_state()
+                state = np.reshape(state, [1, self.state_size])
+                if epsilon > self.epsilon_min:
+                    epsilon *= epsilon_decay
             return
                 # print("uses: {}, actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
                 #       .format(uses, run_actions, run_rewards, epsilon, time.time() - start_time))
@@ -210,10 +215,53 @@ class DDQNAgent:
 
             _, finished = self.map.pass_time()
 
+    def test_step(self, state, action, verbose=False):
+        if action < self.n_clusters**2 - self.n_clusters:
+            performer = int(action/(self.n_clusters-1))
+            reciever = action%(self.n_clusters-1)
+            if reciever >= performer: 
+                reciever+=1
+            if state[0][performer*3] > 0:
+                reward = -np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)
+                state[0][performer*3] -= 1
+                state[0][reciever*3 + 2] += 1
+            else:
+                reward = COST_INVOCATION*5
+            if verbose:
+                print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
+
+        elif action < self.n_clusters**2:
+            cluster_id = action - (self.n_clusters**2 - self.n_clusters)
+            reward = COST_INVOCATION
+            if verbose:
+                print("[ACTION]: C_{}++, R:{}".format(cluster_id, reward))
+            state[0][cluster_id*3] += 1
+
+        done = True
+        for i in range(0,self.state_size,3):
+            done = done and (state[0][i+1] <= (state[0][i] + state[0][i+2]))
+        return state, reward, done
+
+    def test_state(self, state):
+        accumulated_reward = 0
+        state = np.reshape(state, [1, self.state_size])
+        done = False
+        while not done:
+            print("[STATE]: ", np.reshape(state, (self.state_size, 1)).tolist())
+            action = self.act(state, epsilon=0)
+            next_state, reward, done = self.test_step(state, action, verbose=True)
+            next_state = np.reshape(next_state, [1, self.state_size])
+            state = next_state
+            accumulated_reward += reward
+        print("score: {:.2f}".format(accumulated_reward))
+
+
 
     def load(self, name):
-        self.model.load_weights(name)
+        self.model.load_weights(name+".h5")
+        self.map = Map(filename=name+".npz", restaurant_array=[2,6,2], grid_size=100, randseed=25)
 
 
     def save(self, name):
-        self.model.save_weights(name)
+        self.model.save_weights(name+".h5")
+        self.map.save(name+".npz")

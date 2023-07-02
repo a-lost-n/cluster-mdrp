@@ -1,5 +1,6 @@
 import numpy as np
 import datetime
+import copy
 from random import randint, seed, gauss
 from sklearn.cluster import KMeans
 from scipy.stats import norm
@@ -18,6 +19,6 @@ EXPECTED_ATTENDING_DESTINATION = 3
 TIME_TO_DROPOUT_ORDER = 30
 
 COST_TRANSLATION_PER_TRAVEL_UNIT = -1
-COST_INVOCATION = -500
+COST_INVOCATION = -2000
 COST_DELAY_PER_SECOND = -2
 COST_DROPOUT = -1000
