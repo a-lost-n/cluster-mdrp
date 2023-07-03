@@ -8,7 +8,8 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-tf.config.threading.set_inter_op_parallelism_threads(8)
+tf.config.threading.set_inter_op_parallelism_threads(0) 
+tf.config.threading.set_intra_op_parallelism_threads(0)
 
 class DDQNAgent:
     def __init__(self, map):
@@ -16,8 +17,8 @@ class DDQNAgent:
         self.n_clusters = len(map.clusters)
         self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=1024)
-        self.gamma = 0.8
+        self.memory = deque(maxlen=8192)
+        self.gamma = 0.1
         self.epsilon_min = 0.01
         self.learning_rate = 0.001
         self.model = self._build_model()
@@ -26,15 +27,16 @@ class DDQNAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.state_size*8, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(self.state_size*6, activation='relu'))
-        model.add(Dense(self.state_size*4, activation='relu'))
+        model.add(Dense(self.state_size*4, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(self.state_size*3, activation='relu'))
+        model.add(Dense(self.state_size*2, activation='relu'))
         model.add(Dense(self.action_size, activation='sigmoid'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
 
     def remember(self, state, action, reward, next_state, done):
+        # self.fit(state, action, reward, next_state, done)
         self.memory.append((state, action, reward, next_state, done))
 
 
@@ -44,19 +46,21 @@ class DDQNAgent:
         act_values = self.model.predict(state, verbose=0)
         return np.argmax(act_values[0])
 
+    def fit(self, state, action, reward, next_state, done):
+        target = self.model.predict(state, verbose=0)
+        if done:
+            target[0][action] = reward
+        else:
+            Q_future = np.amax(self.target_model.predict(next_state, verbose=0)[0])
+            target[0][action] = reward + self.gamma * Q_future
+        self.model.fit(state, target, epochs=1, verbose=0)
 
     def replay(self, batch_size):
         if len(self.memory) < batch_size:
             return
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
-            target = self.model.predict(state, verbose=0)
-            if done:
-                target[0][action] = reward
-            else:
-                Q_future = np.amax(self.target_model.predict(next_state, verbose=0)[0])
-                target[0][action] = reward + self.gamma * Q_future
-            self.model.fit(state, target, epochs=1, verbose=0)
+            self.fit(state, action, reward, next_state, done)
 
 
     def update_target_model(self):
@@ -76,9 +80,9 @@ class DDQNAgent:
             if reciever >= performer: 
                 reciever+=1
             if self.map.clusters[performer].can_relocate():
-                reward = self.map.relocate_courier(performer,reciever)
+                reward = -self.map.relocate_courier(performer,reciever)/COST_INVOCATION
             else:
-                reward = COST_INVOCATION*5
+                reward = -5
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
@@ -86,7 +90,7 @@ class DDQNAgent:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
-            reward = self.map.invoke_courier(cluster_id)
+            reward = -self.map.invoke_courier(cluster_id)/COST_INVOCATION
 
         new_state, done = self.map.get_state()
         return new_state, reward, done
@@ -114,7 +118,7 @@ class DDQNAgent:
                 while not done:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 500*self.n_clusters
+                    reward = reward if not done else reward + self.n_clusters
                     next_state = np.reshape(next_state, [1, self.state_size])
                     self.remember(state, action, reward, next_state, done)
                     state = next_state

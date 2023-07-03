@@ -5,7 +5,7 @@ class Map():
     # El arreglo va a ser de tamaño 3 y va a tener la siguiente forma:
     # [high, mid, low] donde cada número es la cantidad de restaurantes en el mapa
     def __init__(self, restaurant_array=None, grid_size=None, randseed=0, start=1, epochs=1000, start_time = datetime.time(11,0,0),
-                clusters=None, couriers=None, restaurants=None, restaurants_tags=None, time=None, filename=None):
+                clusters=None, couriers=None, restaurants=None, restaurants_tags=None, time=None, filename=None, labels=None, centroids=None):
         self.resTypes = ['high', 'mid', 'low']
         self.start_time = start_time
         if clusters is not None and couriers is not None:
@@ -14,6 +14,8 @@ class Map():
             self.restaurants = restaurants
             self.restaurants_tags = restaurants_tags
             self.time = time
+            self.labels = labels
+            self.centroids = centroids
             return
         if randseed != 0:
             seed(randseed)
@@ -40,7 +42,8 @@ class Map():
 
     def copy(self):
         return Map(clusters=copy.deepcopy(self.clusters), couriers=copy.deepcopy(self.couriers), 
-                   restaurants=copy.deepcopy(self.restaurants), time=self.time, start_time=self.start_time)
+                   restaurants=copy.deepcopy(self.restaurants), time=self.time, start_time=self.start_time,
+                   labels = self.labels, centroids=self.centroids)
 
 
     def init_clusters(self, start, epochs):
