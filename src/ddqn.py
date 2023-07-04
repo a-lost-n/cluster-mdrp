@@ -12,7 +12,7 @@ from src import *
 os.environ["OMP_NUM_THREADS"] = "1"
 
 # tf.config.threading.set_inter_op_parallelism_threads(36) 
-# tf.config.threading.set_intra_op_parallelism_threads(1)
+# tf.config.threading.set_intra_op_parallelism_threads(2)
 
 class DDQNAgent:
     def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
