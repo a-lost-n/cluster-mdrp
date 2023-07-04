@@ -11,7 +11,7 @@ from src import *
 
 # os.environ["OMP_NUM_THREADS"] = "8"
 
-# tf.config.threading.set_inter_op_parallelism_threads(0) 
+tf.config.threading.set_inter_op_parallelism_threads(36) 
 # tf.config.threading.set_intra_op_parallelism_threads(0)
 
 class DDQNAgent:
@@ -34,8 +34,8 @@ class DDQNAgent:
     def _build_model(self):
         model = Sequential()
         model.add(Dense(self.state_size*4, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(self.state_size*3, activation='relu'))
-        model.add(Dense(self.state_size*2, activation='relu'))
+        model.add(Dense(self.state_size*4, activation='relu'))
+        model.add(Dense(self.state_size*4, activation='relu'))
         model.add(Dense(self.action_size, activation='sigmoid'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
@@ -89,15 +89,15 @@ class DDQNAgent:
             reciever = action%(self.n_clusters-1)
             if reciever >= performer: reciever+=1
             if self.map.clusters[performer].can_relocate():
-                reward = -self.map.relocate_courier(performer,reciever)/COST_ILLEGAL_USE
+                reward = (1-self.map.relocate_courier(performer,reciever)/COST_ILLEGAL_USE)/2
             else:
-                reward = -1
+                reward = 0
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
-            reward = -self.map.invoke_courier(cluster_id)/COST_ILLEGAL_USE
+            reward = (1-self.map.invoke_courier(cluster_id)/COST_ILLEGAL_USE)/2
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
