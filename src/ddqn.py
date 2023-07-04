@@ -9,10 +9,10 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-os.environ["OMP_NUM_THREADS"] = "3"
+os.environ["OMP_NUM_THREADS"] = "1"
 
 # tf.config.threading.set_inter_op_parallelism_threads(36) 
-# tf.config.threading.set_intra_op_parallelism_threads(0)
+# tf.config.threading.set_intra_op_parallelism_threads(1)
 
 class DDQNAgent:
     def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
@@ -33,8 +33,8 @@ class DDQNAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.state_size*4, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(self.state_size*4, activation='relu'))
+        model.add(Dense(self.n_clusters*2, input_dim=self.state_size, activation='relu'))
+        # model.add(Dense(self.state_size*4, activation='relu'))
         # model.add(Dense(self.state_size*4, activation='relu'))
         model.add(Dense(self.action_size, activation='tanh'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
@@ -230,17 +230,17 @@ class DDQNAgent:
             if reciever >= performer: 
                 reciever+=1
             if state[0][performer*3] > 0:
-                reward = -np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)
+                reward = np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)/COST_ILLEGAL_USE
                 state[0][performer*3] -= 1
                 state[0][reciever*3 + 2] += 1
             else:
-                reward = COST_INVOCATION*5
+                reward = -1
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
-            reward = COST_INVOCATION
+            reward = -COST_INVOCATION/COST_ILLEGAL_USE
             if verbose:
                 print("[ACTION]: C_{}++, R:{}".format(cluster_id, reward))
             state[0][cluster_id*3] += 1
