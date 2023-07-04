@@ -12,17 +12,20 @@ tf.config.threading.set_inter_op_parallelism_threads(0)
 tf.config.threading.set_intra_op_parallelism_threads(0)
 
 class DDQNAgent:
-    def __init__(self, map):
-        self.map = map
-        self.n_clusters = len(map.clusters)
+    def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
+        self.map = Map(restaurant_array=restaurant_array, grid_size=grid_size, randseed=randseed, filename=filename)
+        self.n_clusters = len(self.map.clusters)
         self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=8192)
-        self.gamma = 0.1
+        self.memory = deque(maxlen=2048)
+        self.gamma = 0.99
         self.epsilon_min = 0.01
-        self.learning_rate = 0.001
+        self.learning_rate = 0.01 #0.001
         self.model = self._build_model()
         self.target_model = self._build_model()
+        if filename:
+            self.load(filename)
+            self.update_target_model()
 
 
     def _build_model(self):
@@ -35,9 +38,10 @@ class DDQNAgent:
         return model
 
 
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, experiences):
         # self.fit(state, action, reward, next_state, done)
-        self.memory.append((state, action, reward, next_state, done))
+        for state, action, reward, next_state, done in experiences:
+            self.memory.append((state, action, reward, next_state, done))
 
 
     def act(self, state, epsilon):
@@ -71,26 +75,28 @@ class DDQNAgent:
         self.map.reset()
         self.map.build_prediction()
         return self.map.get_state()
+    
+    def test_random(self):
+        return random.randrange(self.action_size)
 
 
     def step(self, action, verbose=False):
         if action < self.n_clusters**2 - self.n_clusters:
             performer = int(action/(self.n_clusters-1))
             reciever = action%(self.n_clusters-1)
-            if reciever >= performer: 
-                reciever+=1
+            if reciever >= performer: reciever+=1
             if self.map.clusters[performer].can_relocate():
-                reward = -self.map.relocate_courier(performer,reciever)/COST_INVOCATION
+                reward = -self.map.relocate_courier(performer,reciever)/COST_ILLEGAL_USE
             else:
-                reward = -5
+                reward = -1
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
+            reward = -self.map.invoke_courier(cluster_id)/COST_ILLEGAL_USE
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
-            reward = -self.map.invoke_courier(cluster_id)/COST_INVOCATION
 
         new_state, done = self.map.get_state()
         return new_state, reward, done
@@ -107,25 +113,22 @@ class DDQNAgent:
                 _, finished = self.map.pass_time()
                 continue
             state = np.reshape(state, [1, self.state_size])
-            # uses += 1 if not done else 0
             for e in range(episodes):
                 run_actions = 0
                 run_rewards = 0
-                # accumulated_reward = 0
-                # total_actions = 0
-                # uses = 0
-                # count = 0
-                while not done:
+                experiences = []
+                while not done and run_actions < 50:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + self.n_clusters
+                    reward = reward if not done else reward + 1
                     next_state = np.reshape(next_state, [1, self.state_size])
-                    self.remember(state, action, reward, next_state, done)
+                    experiences.append([state, action, reward, next_state, done])
                     state = next_state
                     run_actions += 1
                     run_rewards += reward
-
-
+                
+                # if run_rewards > -50:
+                self.remember(experiences)
                 # _, finished = self.map.pass_time()
                 self.replay(batch_size)
                 if e%10 == 0:
@@ -157,44 +160,42 @@ class DDQNAgent:
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
         for e in range(episodes):
+            start_time = time.time()
             finished = False
             accumulated_reward = 0
             total_actions = 0
-            uses = 0
             state = self.reset()[0]
             count = 0
             while not finished:
-                start_time = time.time()
                 state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
-                uses += 1 if not done else 0
                 run_actions = 0
                 run_rewards = 0
-                while not done:
+                experiences = []
+                while not done and run_actions < 50:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 500*self.n_clusters
+                    reward = reward if not done else reward + 1
                     next_state = np.reshape(next_state, [1, self.state_size])
-                    self.remember(state, action, reward, next_state, done)
+                    experiences.append([state, action, reward, next_state, done])
                     state = next_state
                     run_actions += 1
                     run_rewards += reward
-
-
-                _, finished = self.map.pass_time()
+                self.remember(experiences)
                 self.replay(batch_size)
                 if count % 24 == 0:
-                    self.update_target_model()
                     print(np.reshape(state, (self.state_size,1)).tolist())
-                # print("uses: {}, actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
-                #       .format(uses, run_actions, run_rewards, epsilon, time.time() - start_time))
+                # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
+                #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
                 total_actions += run_actions
                 accumulated_reward += run_rewards
                 count += 1
+                _, finished = self.map.pass_time()
 
 
-            print("episode: {}/{}, score: {:.2f}, e: {:.2f}, mems: {}, uses: {}, act/use: {:.2f}"
-                            .format(e+1, episodes, accumulated_reward, epsilon, total_actions, uses, total_actions/uses))
+            self.update_target_model()
+            print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
+                            .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
             if epsilon > self.epsilon_min:
                 epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
@@ -263,7 +264,6 @@ class DDQNAgent:
 
     def load(self, name):
         self.model.load_weights(name+".h5")
-        self.map = Map(filename=name+".npz", restaurant_array=[2,6,2], grid_size=100, randseed=25)
 
 
     def save(self, name):

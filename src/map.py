@@ -33,7 +33,7 @@ class Map():
                 self.restaurants_tags.append(resType)
         self.restaurants = np.array(self.restaurants)
         if filename is not None:
-            self.load(filename)
+            self.load(filename+".npz")
         else:
             self.init_clusters(start=start, epochs=epochs)
         for i in range(self.centroids.shape[0]):
