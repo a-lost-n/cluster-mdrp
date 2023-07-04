@@ -7,6 +7,7 @@
 
 module purge
 module load miniconda/3.0
+eval "$(conda shell.bash hook)"
 conda activate tesis
 # module load python/3.9.2 
 python train.py # siendo prueba_python.py el nombre del programa python
