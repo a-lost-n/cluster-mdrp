@@ -9,9 +9,9 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-# os.environ["OMP_NUM_THREADS"] = "8"
+os.environ["OMP_NUM_THREADS"] = "3"
 
-tf.config.threading.set_inter_op_parallelism_threads(36) 
+# tf.config.threading.set_inter_op_parallelism_threads(36) 
 # tf.config.threading.set_intra_op_parallelism_threads(0)
 
 class DDQNAgent:
@@ -21,7 +21,7 @@ class DDQNAgent:
         self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
         self.memory = deque(maxlen=2048)
-        self.gamma = 0.99
+        self.gamma = 0.98
         self.epsilon_min = 0.01
         self.learning_rate = 0.01 #0.001
         self.model = self._build_model()
@@ -35,8 +35,8 @@ class DDQNAgent:
         model = Sequential()
         model.add(Dense(self.state_size*4, input_dim=self.state_size, activation='relu'))
         model.add(Dense(self.state_size*4, activation='relu'))
-        model.add(Dense(self.state_size*4, activation='relu'))
-        model.add(Dense(self.action_size, activation='sigmoid'))
+        # model.add(Dense(self.state_size*4, activation='relu'))
+        model.add(Dense(self.action_size, activation='tanh'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
@@ -89,15 +89,15 @@ class DDQNAgent:
             reciever = action%(self.n_clusters-1)
             if reciever >= performer: reciever+=1
             if self.map.clusters[performer].can_relocate():
-                reward = (1-self.map.relocate_courier(performer,reciever)/COST_ILLEGAL_USE)/2
+                reward = -self.map.relocate_courier(performer,reciever)/COST_ILLEGAL_USE
             else:
-                reward = 0
+                reward = -1
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
-            reward = (1-self.map.invoke_courier(cluster_id)/COST_ILLEGAL_USE)/2
+            reward = -self.map.invoke_courier(cluster_id)/COST_ILLEGAL_USE
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
