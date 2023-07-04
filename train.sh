@@ -10,6 +10,6 @@ module load miniconda/3.0
 eval "$(conda shell.bash hook)"
 conda activate tesis
 # module load python/3.9.2 
-python train.py # siendo prueba_python.py el nombre del programa python
+python main.py # siendo prueba_python.py el nombre del programa python
 # module unload python/3.9.2
 conda deactivate tesis

@@ -2,14 +2,17 @@ import numpy as np
 import random
 import time
 import tensorflow as tf
+import os
 from collections import deque
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-tf.config.threading.set_inter_op_parallelism_threads(0) 
-tf.config.threading.set_intra_op_parallelism_threads(0)
+os.environ["OMP_NUM_THREADS"] = "8"
+
+# tf.config.threading.set_inter_op_parallelism_threads(0) 
+# tf.config.threading.set_intra_op_parallelism_threads(0)
 
 class DDQNAgent:
     def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
