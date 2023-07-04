@@ -9,7 +9,7 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-os.environ["OMP_NUM_THREADS"] = "8"
+# os.environ["OMP_NUM_THREADS"] = "8"
 
 # tf.config.threading.set_inter_op_parallelism_threads(0) 
 # tf.config.threading.set_intra_op_parallelism_threads(0)
@@ -187,7 +187,7 @@ class DDQNAgent:
                 self.remember(experiences)
                 self.replay(batch_size)
                 if count % 24 == 0:
-                    print(np.reshape(state, (self.state_size,1)).tolist())
+                    print(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time)
                 # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
                 #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
                 total_actions += run_actions
