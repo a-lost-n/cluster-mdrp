@@ -20,10 +20,10 @@ class DDQNAgent:
         self.n_clusters = len(self.map.clusters)
         self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=2048)
-        self.gamma = 0.98
+        self.memory = deque(maxlen=1024)
+        self.gamma = 0.99
         self.epsilon_min = 0.01
-        self.learning_rate = 0.001
+        self.learning_rate = 0.005
         self.model = self._build_model()
         self.target_model = self._build_model()
         if filename:
@@ -33,18 +33,15 @@ class DDQNAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.n_clusters*2, input_dim=self.state_size, activation='relu'))
-        # model.add(Dense(self.state_size*4, activation='relu'))
-        # model.add(Dense(self.state_size*4, activation='relu'))
+        model.add(Dense(self.state_size*2, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(self.state_size*2, activation='relu'))
         model.add(Dense(self.action_size, activation='tanh'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
 
-    def remember(self, experiences):
-        # self.fit(state, action, reward, next_state, done)
-        for state, action, reward, next_state, done in experiences:
-            self.memory.append((state, action, reward, next_state, done))
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
 
 
     def act(self, state, epsilon):
@@ -163,27 +160,26 @@ class DDQNAgent:
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
         for e in range(episodes):
-            state, done = self.reset()
+            state, _ = self.reset()
             start_time = time.time()
             finished = False
             accumulated_reward = 0
             total_actions = 0
             count = 0
             while not finished:
+                state, done = self.map.get_state(algorithm="Perceptron")
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0
-                experiences = []
                 while not done and run_actions < 50:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
                     reward = reward if not done else reward + 1
                     next_state = np.reshape(next_state, [1, self.state_size])
-                    experiences.append([state, action, reward, next_state, done])
+                    self.remember(state, action, reward, next_state, done)
                     state = next_state
                     run_actions += 1
                     run_rewards += reward
-                self.remember(experiences)
                 self.replay(batch_size)
                 if count % 24 == 0:
                     print(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time)

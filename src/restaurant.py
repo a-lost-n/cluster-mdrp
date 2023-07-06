@@ -20,10 +20,6 @@ class Restaurant():
       case 'mid':
         self.mult_m = 1
         self.mult_sd = 1
-    #   case 'day':
-    #     print('day')
-    #   case 'night':
-    #     print('night')
 
 
   def produce(self, time):
@@ -64,13 +60,3 @@ class Restaurant():
 
   def reset(self):
     del self.active_orders[:]
-
-  # @DeprecationWarning("Ya no se usa probabilistica del estado")
-  def expected_orders(self, time, expected_max_deviation=0.8):
-    time = nextStamp(time)
-    mean, sd = self.get_mean_sd(time)
-    mean *= self.mult_m
-    sd *= self.mult_sd
-    z_value = norm.ppf((expected_max_deviation+1)/2)
-    return max(int((mean + z_value * sd - self.hour_order_count)/(HOUR_LAPSES - time.minute/DELTA_MINUTES) + 0.5), 0)
-

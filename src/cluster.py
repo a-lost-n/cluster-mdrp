@@ -42,6 +42,7 @@ class Cluster():
     reward = 0
     for order in self.active_orders:
       if nextStamp(order.order_time, TIME_TO_DROPOUT_ORDER) >= time:
+        self.active_orders.remove(order)
         reward += COST_DROPOUT
     return reward
 
@@ -69,11 +70,7 @@ class Cluster():
     del self.active_orders[:]
     del self.incoming_couriers[:]
 
-  """
-  Hay 2 estados:
-  0: Hay un exceso de couriers con respecto a las ordenes pendientes.
-  1: Hay un falta de couriers con respecto a las ordenes pendientes.
-  """
+
   def get_state(self, algorithm='DDQN'):
     if algorithm == 'DDQN':
         return [len(self.courier_list), len(self.active_orders), len(self.incoming_couriers)]
@@ -84,8 +81,3 @@ class Cluster():
         return 0
       else:
         return 1
-
-
-  # @DeprecationWarning("La invocación se realiza desde el mapa")
-  def invoke_courier(self):
-    self.courier_list.append(Courier(pos=self.centroid, courier_id=0,cluster_id=self.id))

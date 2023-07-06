@@ -1,3 +1,4 @@
+import gc
 from src import *
 
 class Map():
@@ -59,6 +60,7 @@ class Map():
         del self.couriers[:]
         for cluster in self.clusters:
             cluster.reset()
+        gc.collect()
 
     
     def get_state(self, algorithm='DDQN'):
@@ -76,7 +78,7 @@ class Map():
             for cluster in self.clusters:
                 cluster_state = cluster.get_state(algorithm=algorithm) 
                 state_array.extend(cluster_state)
-                done = done and (cluster_state[1] > 0)
+                done = done and (cluster_state[1] > -1)
             return np.array(state_array), done
         else:
             for cluster in self.clusters:

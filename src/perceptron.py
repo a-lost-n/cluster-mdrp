@@ -3,6 +3,7 @@ import random
 import time
 import tensorflow as tf
 import os
+import gc
 from collections import deque
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
@@ -25,15 +26,14 @@ class Agent:
         self.epsilon_min = 0.01
         self.learning_rate = 0.001
         self.model = self._build_model()
+        if filename: self.load(filename)
         self.target_model = self._build_model()
-        if filename:
-            self.load(filename)
-            self.update_target_model()
+        self.update_target_model()
 
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.action_size, input_dim=self.state_size, activation='tanh'))
+        model.add(Dense(self.action_size, input_dim=self.state_size, activation='linear'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
@@ -103,13 +103,14 @@ class Agent:
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
         for e in range(episodes):
-            state, done = self.reset()
+            state, _ = self.reset()
             start_time = time.time()
             finished = False
             accumulated_reward = 0
             total_actions = 0
             count = 0
             while not finished:
+                state, done = self.map.get_state(algorithm="Perceptron")
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0
@@ -125,8 +126,8 @@ class Agent:
                 self.replay(batch_size)
                 if count % 24 == 0:
                     print(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time)
-                # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
-                #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
+                    # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
+                    #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
                 total_actions += run_actions
                 accumulated_reward += run_rewards
                 count += 1
