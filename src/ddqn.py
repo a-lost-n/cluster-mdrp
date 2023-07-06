@@ -9,9 +9,9 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-# os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
 
-tf.config.threading.set_inter_op_parallelism_threads(12) 
+# tf.config.threading.set_inter_op_parallelism_threads(12) 
 # tf.config.threading.set_intra_op_parallelism_threads(2)
 
 class DDQNAgent:
@@ -163,14 +163,13 @@ class DDQNAgent:
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
         for e in range(episodes):
+            state, done = self.reset()
             start_time = time.time()
             finished = False
             accumulated_reward = 0
             total_actions = 0
-            state = self.reset()[0]
             count = 0
             while not finished:
-                state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0

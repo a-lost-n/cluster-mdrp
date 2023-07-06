@@ -20,7 +20,7 @@ class Agent:
         self.n_clusters = len(self.map.clusters)
         self.state_size = 2*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=2048)
+        self.memory = deque(maxlen=1024)
         self.gamma = 0.98
         self.epsilon_min = 0.01
         self.learning_rate = 0.001
@@ -34,15 +34,12 @@ class Agent:
     def _build_model(self):
         model = Sequential()
         model.add(Dense(self.action_size, input_dim=self.state_size, activation='tanh'))
-        # model.add(Dense(self.action_size, activation='tanh'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
 
-    def remember(self, experiences):
-        # self.fit(state, action, reward, next_state, done)
-        for state, action, reward, next_state, done in experiences:
-            self.memory.append((state, action, reward, next_state, done))
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
 
 
     def act(self, state, epsilon):
@@ -106,28 +103,25 @@ class Agent:
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
         for e in range(episodes):
+            state, done = self.reset()
             start_time = time.time()
             finished = False
             accumulated_reward = 0
             total_actions = 0
-            state = self.reset()[0]
             count = 0
             while not finished:
-                state, done = self.map.get_state(algorithm="Perceptron")
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0
-                experiences = []
                 while not done and run_actions < 50:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
                     reward = reward if not done else reward + 1
                     next_state = np.reshape(next_state, [1, self.state_size])
-                    experiences.append([state, action, reward, next_state, done])
+                    self.remember(state, action, reward, next_state, done)
                     state = next_state
                     run_actions += 1
                     run_rewards += reward
-                self.remember(experiences)
                 self.replay(batch_size)
                 if count % 24 == 0:
                     print(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time)
@@ -140,8 +134,8 @@ class Agent:
 
 
             self.update_target_model()
-            # print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
-            #                 .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
+            print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
+                            .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
             if epsilon > self.epsilon_min:
                 epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
