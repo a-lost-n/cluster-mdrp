@@ -9,16 +9,16 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from src import *
 
-# os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
 
-tf.config.threading.set_inter_op_parallelism_threads(12) 
+# tf.config.threading.set_inter_op_parallelism_threads(12) 
 # tf.config.threading.set_intra_op_parallelism_threads(2)
 
-class DDQNAgent:
+class Agent:
     def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
         self.map = Map(restaurant_array=restaurant_array, grid_size=grid_size, randseed=randseed, filename=filename)
         self.n_clusters = len(self.map.clusters)
-        self.state_size = 3*self.n_clusters
+        self.state_size = 2*self.n_clusters
         self.action_size = self.n_clusters**2
         self.memory = deque(maxlen=2048)
         self.gamma = 0.98
@@ -33,10 +33,8 @@ class DDQNAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.n_clusters*2, input_dim=self.state_size, activation='relu'))
-        # model.add(Dense(self.state_size*4, activation='relu'))
-        # model.add(Dense(self.state_size*4, activation='relu'))
-        model.add(Dense(self.action_size, activation='tanh'))
+        model.add(Dense(self.action_size, input_dim=self.state_size, activation='tanh'))
+        # model.add(Dense(self.action_size, activation='tanh'))
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
@@ -77,7 +75,7 @@ class DDQNAgent:
     def reset(self):
         self.map.reset()
         self.map.build_prediction()
-        return self.map.get_state()
+        return self.map.get_state(algorithm="Perceptron")
     
     def test_random(self):
         return random.randrange(self.action_size)
@@ -101,64 +99,9 @@ class DDQNAgent:
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
-        new_state, done = self.map.get_state()
+        new_state, done = self.map.get_state(algorithm="Perceptron")
         return new_state, reward, done
 
-    def train_by_timestamp(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
-        reward_history = []
-        state = self.reset()[0]
-        finished = False
-
-        while not finished:
-            map_copy = self.map.copy()
-            state, done = self.map.get_state()
-            if done:
-                _, finished = self.map.pass_time()
-                continue
-            state = np.reshape(state, [1, self.state_size])
-            for e in range(episodes):
-                run_actions = 0
-                run_rewards = 0
-                experiences = []
-                while not done and run_actions < 50:
-                    action = self.act(state, epsilon)
-                    next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 1
-                    next_state = np.reshape(next_state, [1, self.state_size])
-                    experiences.append([state, action, reward, next_state, done])
-                    state = next_state
-                    run_actions += 1
-                    run_rewards += reward
-                
-                # if run_rewards > -50:
-                self.remember(experiences)
-                # _, finished = self.map.pass_time()
-                self.replay(batch_size)
-                if e%10 == 0:
-                    self.update_target_model()
-                if e % (episodes/10) == 0:
-                    print(np.reshape(state, (self.state_size,1)).tolist())
-                    print("actions: {}, reward: {:.2f}, e: {:.3f}".format(run_actions, run_rewards, epsilon))
-                self.map = map_copy.copy()
-                state, done = self.map.get_state()
-                state = np.reshape(state, [1, self.state_size])
-                if epsilon > self.epsilon_min:
-                    epsilon *= epsilon_decay
-            return
-                # print("uses: {}, actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
-                #       .format(uses, run_actions, run_rewards, epsilon, time.time() - start_time))
-                # total_actions += run_actions
-                # accumulated_reward += run_rewards
-                # count += 1
-
-
-            # print("episode: {}/{}, score: {:.2f}, e: {:.2f}, mems: {}, uses: {}, act/use: {:.2f}"
-            #                 .format(e+1, episodes, accumulated_reward, epsilon, total_actions, uses, total_actions/uses))
-            # if epsilon > self.epsilon_min:
-            #     epsilon *= epsilon_decay
-            # reward_history.append(accumulated_reward)
-            
-        return reward_history
 
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
@@ -170,7 +113,7 @@ class DDQNAgent:
             state = self.reset()[0]
             count = 0
             while not finished:
-                state, done = self.map.get_state()
+                state, done = self.map.get_state(algorithm="Perceptron")
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0
@@ -197,8 +140,8 @@ class DDQNAgent:
 
 
             self.update_target_model()
-            print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
-                            .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
+            # print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
+            #                 .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
             if epsilon > self.epsilon_min:
                 epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
@@ -211,7 +154,7 @@ class DDQNAgent:
         accumulated_reward = 0
         state = self.reset()[0]
         while not finished:
-            state, done = self.map.get_state()
+            state, done = self.map.get_state(algorithm="Perceptron")
             state = np.reshape(state, [1, self.state_size])
             while not done:
                 print("[STATE]: ", np.reshape(state, (self.state_size, 1)).tolist())

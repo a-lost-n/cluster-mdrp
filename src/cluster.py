@@ -77,6 +77,8 @@ class Cluster():
   def get_state(self, algorithm='DDQN'):
     if algorithm == 'DDQN':
         return [len(self.courier_list), len(self.active_orders), len(self.incoming_couriers)]
+    elif algorithm == 'Perceptron':
+        return [len(self.courier_list), len(self.courier_list) + len(self.incoming_couriers) - len(self.active_orders)]
     else:
       if len(self.active_orders) <= len(self.courier_list) + len(self.incoming_couriers):
         return 0
