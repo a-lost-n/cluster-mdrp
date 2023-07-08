@@ -3,7 +3,6 @@ import random
 import time
 import tensorflow as tf
 import os
-import gc
 from collections import deque
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
@@ -19,22 +18,23 @@ class Agent:
     def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
         self.map = Map(restaurant_array=restaurant_array, grid_size=grid_size, randseed=randseed, filename=filename)
         self.n_clusters = len(self.map.clusters)
-        self.state_size = 2*self.n_clusters
+        self.state_size = 3*self.n_clusters 
         self.action_size = self.n_clusters**2
         self.memory = deque(maxlen=1024)
-        self.gamma = 0.98
+        self.gamma = 1
         self.epsilon_min = 0.01
         self.learning_rate = 0.001
         self.model = self._build_model()
         if filename: self.load(filename)
         self.target_model = self._build_model()
-        self.update_target_model()
 
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.action_size, input_dim=self.state_size, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
+        model.add(Dense(self.state_size, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(self.state_size, activation='relu'))
+        model.add(Dense(self.action_size, activation='linear'))
+        model.compile(loss='huber', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
 
@@ -42,18 +42,25 @@ class Agent:
         self.memory.append((state, action, reward, next_state, done))
 
 
-    def act(self, state, epsilon):
+    def act(self, state, epsilon=0, return_value=False):
+        possible_actions = [*range(self.action_size)]
+        for i in range(0, self.state_size, 3):
+            if state[0][i] == 0:
+                for j in range(0, self.n_clusters-1):
+                    possible_actions.remove(i*2/3 + j)
         if np.random.rand() <= epsilon:
-            return random.randrange(self.action_size)
+            return random.choice(possible_actions)
         act_values = self.model.predict(state, verbose=0)
-        return np.argmax(act_values[0])
+        act_values = [act_values[0][i] if i in possible_actions else -np.Infinity for i in range(len(act_values[0]))]
+        if return_value: return np.amax(act_values)
+        return np.argmax(act_values)
 
     def fit(self, state, action, reward, next_state, done):
         target = self.model.predict(state, verbose=0)
         if done:
             target[0][action] = reward
         else:
-            Q_future = np.amax(self.target_model.predict(next_state, verbose=0)[0])
+            Q_future = self.act(next_state, return_value=True)
             target[0][action] = reward + self.gamma * Q_future
         self.model.fit(state, target, epochs=1, verbose=0)
 
@@ -72,7 +79,7 @@ class Agent:
     def reset(self):
         self.map.reset()
         self.map.build_prediction()
-        return self.map.get_state(algorithm="Perceptron")
+        return self.map.get_state()
     
     def test_random(self):
         return random.randrange(self.action_size)
@@ -84,7 +91,7 @@ class Agent:
             reciever = action%(self.n_clusters-1)
             if reciever >= performer: reciever+=1
             if self.map.clusters[performer].can_relocate():
-                reward = -self.map.relocate_courier(performer,reciever)/COST_ILLEGAL_USE
+                reward = -self.map.relocate_courier(performer,reciever)
             else:
                 reward = -1
             if verbose:
@@ -92,11 +99,11 @@ class Agent:
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
-            reward = -self.map.invoke_courier(cluster_id)/COST_ILLEGAL_USE
+            reward = -self.map.invoke_courier(cluster_id)
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
-        new_state, done = self.map.get_state(algorithm="Perceptron")
+        new_state, done = self.map.get_state()
         return new_state, reward, done
 
 
@@ -110,14 +117,14 @@ class Agent:
             total_actions = 0
             count = 0
             while not finished:
-                state, done = self.map.get_state(algorithm="Perceptron")
+                state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0
                 while not done and run_actions < 50:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 1
+                    reward = reward if not done else reward - COST_INVOCATION
                     next_state = np.reshape(next_state, [1, self.state_size])
                     self.remember(state, action, reward, next_state, done)
                     state = next_state
@@ -125,7 +132,7 @@ class Agent:
                     run_rewards += reward
                 self.replay(batch_size)
                 if count % 24 == 0:
-                    print(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time)
+                    print("{}, t: {:.3f}s".format(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time))
                     # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
                     #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
                 total_actions += run_actions
@@ -143,13 +150,64 @@ class Agent:
             
         return reward_history
 
+    def train_by_timestamp(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
+        reward_history = []
+        state = self.reset()[0]
+        finished = False
+        iterations = 0
+        while not finished and iterations < 2:
+            map_copy = self.map.copy()
+            state, done = self.map.get_state()
+            if done:
+                _, finished = self.map.pass_time()
+                continue
+            state = np.reshape(state, [1, self.state_size])
+            for e in range(episodes):
+                run_actions = 0
+                run_rewards = 0
+                while not done and run_actions < 50:
+                    action = self.act(state, epsilon)
+                    next_state, reward, done = self.step(action)
+                    reward = reward if not done else reward + 1
+                    next_state = np.reshape(next_state, [1, self.state_size])
+                    self.remember(state, action, reward, next_state, done)
+                    state = next_state
+                    run_actions += 1
+                    run_rewards += reward
+                
+                # if run_rewards > -50:
+                # _, finished = self.map.pass_time()
+                self.replay(batch_size)
+                if e%10 == 0:
+                    self.update_target_model()
+                if e % (episodes/10) == 0:
+                    print(np.reshape(state, (self.state_size,1)).tolist())
+                    print("actions: {}, reward: {:.2f}, e: {:.3f}".format(run_actions, run_rewards, epsilon))
+                self.map = map_copy.copy()
+                state, done = self.map.get_state()
+                state = np.reshape(state, [1, self.state_size])
+                if epsilon > self.epsilon_min:
+                    epsilon *= epsilon_decay
+
+            iterations += 1
+            state = np.reshape(state, [1, self.state_size])
+            while not done:
+                print("[STATE]: ", np.reshape(state, (self.state_size, 1)).tolist())
+                action = self.act(state, epsilon=0)
+                next_state, reward, done = self.step(action, verbose=True)
+                next_state = np.reshape(next_state, [1, self.state_size])
+                state = next_state
+
+            _, finished = self.map.pass_time()
+            
+        return reward_history
 
     def test(self):
         finished = False
         accumulated_reward = 0
         state = self.reset()[0]
         while not finished:
-            state, done = self.map.get_state(algorithm="Perceptron")
+            state, done = self.map.get_state()
             state = np.reshape(state, [1, self.state_size])
             while not done:
                 print("[STATE]: ", np.reshape(state, (self.state_size, 1)).tolist())
@@ -168,7 +226,7 @@ class Agent:
             if reciever >= performer: 
                 reciever+=1
             if state[0][performer*3] > 0:
-                reward = np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)/COST_ILLEGAL_USE
+                reward = np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)/COST_INVOCATION
                 state[0][performer*3] -= 1
                 state[0][reciever*3 + 2] += 1
             else:
@@ -178,7 +236,7 @@ class Agent:
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
-            reward = -COST_INVOCATION/COST_ILLEGAL_USE
+            reward = -1
             if verbose:
                 print("[ACTION]: C_{}++, R:{}".format(cluster_id, reward))
             state[0][cluster_id*3] += 1
@@ -200,13 +258,3 @@ class Agent:
             state = next_state
             accumulated_reward += reward
         print("score: {:.2f}".format(accumulated_reward))
-
-
-
-    def load(self, name):
-        self.model.load_weights(name+".h5")
-
-
-    def save(self, name):
-        self.model.save_weights(name+".h5")
-        self.map.save(name+".npz")

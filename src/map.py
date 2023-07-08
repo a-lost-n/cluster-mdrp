@@ -63,27 +63,14 @@ class Map():
         gc.collect()
 
     
-    def get_state(self, algorithm='DDQN'):
+    def get_state(self):
         state_array = []
-        if algorithm == 'DDQN':
-            done = True
-            for cluster in self.clusters:
-                cluster_state = cluster.get_state(algorithm=algorithm) 
-                state_array.extend(cluster_state)
-                done = done and (cluster_state[1] <= cluster_state[0] + cluster_state[2])
-            # state_array.extend([self.time.hour])
-            return np.array(state_array), done
-        elif algorithm == 'Perceptron':
-            done = True
-            for cluster in self.clusters:
-                cluster_state = cluster.get_state(algorithm=algorithm) 
-                state_array.extend(cluster_state)
-                done = done and (cluster_state[1] > -1)
-            return np.array(state_array), done
-        else:
-            for cluster in self.clusters:
-                state_array.append(cluster.get_state(algorithm=algorithm))
-        return state_array
+        done = True
+        for cluster in self.clusters:
+            cluster_state = cluster.get_state() 
+            state_array.extend(cluster_state)
+            done = done and (cluster_state[1] <= cluster_state[0] + cluster_state[2])
+        return np.array(state_array), done
 
     def invoke_courier(self, cluster_id):
         cluster = self.clusters[cluster_id]

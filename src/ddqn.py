@@ -101,61 +101,7 @@ class DDQNAgent:
         new_state, done = self.map.get_state()
         return new_state, reward, done
 
-    def train_by_timestamp(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
-        reward_history = []
-        state = self.reset()[0]
-        finished = False
 
-        while not finished:
-            map_copy = self.map.copy()
-            state, done = self.map.get_state()
-            if done:
-                _, finished = self.map.pass_time()
-                continue
-            state = np.reshape(state, [1, self.state_size])
-            for e in range(episodes):
-                run_actions = 0
-                run_rewards = 0
-                experiences = []
-                while not done and run_actions < 50:
-                    action = self.act(state, epsilon)
-                    next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 1
-                    next_state = np.reshape(next_state, [1, self.state_size])
-                    experiences.append([state, action, reward, next_state, done])
-                    state = next_state
-                    run_actions += 1
-                    run_rewards += reward
-                
-                # if run_rewards > -50:
-                self.remember(experiences)
-                # _, finished = self.map.pass_time()
-                self.replay(batch_size)
-                if e%10 == 0:
-                    self.update_target_model()
-                if e % (episodes/10) == 0:
-                    print(np.reshape(state, (self.state_size,1)).tolist())
-                    print("actions: {}, reward: {:.2f}, e: {:.3f}".format(run_actions, run_rewards, epsilon))
-                self.map = map_copy.copy()
-                state, done = self.map.get_state()
-                state = np.reshape(state, [1, self.state_size])
-                if epsilon > self.epsilon_min:
-                    epsilon *= epsilon_decay
-            return
-                # print("uses: {}, actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
-                #       .format(uses, run_actions, run_rewards, epsilon, time.time() - start_time))
-                # total_actions += run_actions
-                # accumulated_reward += run_rewards
-                # count += 1
-
-
-            # print("episode: {}/{}, score: {:.2f}, e: {:.2f}, mems: {}, uses: {}, act/use: {:.2f}"
-            #                 .format(e+1, episodes, accumulated_reward, epsilon, total_actions, uses, total_actions/uses))
-            # if epsilon > self.epsilon_min:
-            #     epsilon *= epsilon_decay
-            # reward_history.append(accumulated_reward)
-            
-        return reward_history
 
     def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []

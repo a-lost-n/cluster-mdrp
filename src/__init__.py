@@ -7,4 +7,4 @@ from src.restaurant import Restaurant
 from src.cluster import Cluster
 from src.map import Map
 from src.ddqn import DDQNAgent
-from src.perceptron import Agent
+from src.agent import Agent
