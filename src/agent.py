@@ -21,7 +21,7 @@ class Agent:
         self.state_size = 3*self.n_clusters 
         self.action_size = self.n_clusters**2
         self.memory = deque(maxlen=1024)
-        self.gamma = 1
+        self.gamma = 0.9
         self.epsilon_min = 0.01
         self.learning_rate = 0.01
         self.model = self._build_model()

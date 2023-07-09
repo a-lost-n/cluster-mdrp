@@ -1,4 +1,5 @@
 import gc
+import pandas as pd
 from src import *
 
 class Map():
@@ -9,34 +10,50 @@ class Map():
                 clusters=None, couriers=None, restaurants=None, restaurants_tags=None, time=None, filename=None, labels=None, centroids=None):
         self.resTypes = ['high', 'mid', 'low']
         self.start_time = start_time
-        if clusters is not None and couriers is not None:
-            self.clusters = clusters
-            self.couriers = couriers
-            self.restaurants = restaurants
-            self.restaurants_tags = restaurants_tags
-            self.time = time
-            self.labels = labels
-            self.centroids = centroids
-            return
-        if randseed != 0:
-            seed(randseed)
-        self.clusters = []
-        self.couriers = []
-        self.restaurants = []
-        self.restaurants_tags = []
-        self.time = start_time
-        for resNum, resType in zip(restaurant_array,self.resTypes):
-            for _ in range(resNum):
+        if filename is not None and '.' in filename:
+            self.clusters = []
+            self.couriers = []
+            self.restaurants = []
+            self.restaurants_tags = []
+            rest_df = pd.read_csv("0o100t100s1p100/restaurants.txt", sep='\t', lineterminator='\n')
+            for rest in rest_df.iterrows():
                 self.restaurants.append(Restaurant(id=len(self.restaurants),
-                                                grid_size=grid_size,
-                                                type=resType,
-                                                randseed=randint(1,10000)))
-                self.restaurants_tags.append(resType)
-        self.restaurants = np.array(self.restaurants)
-        if filename is not None:
-            self.load(filename+".npz")
-        else:
+                                                          grid_size=max(np.max(rest_df['x']),np.max(rest_df['y'])),
+                                                          type='mid',
+                                                          x=rest[1]['x'],
+                                                          y=rest[1]['y']))
+                self.restaurants_tags.append('mid')
+            self.restaurants = np.array(self.restaurants)
             self.init_clusters(start=start, epochs=epochs)
+        else:
+            if clusters is not None and couriers is not None:
+                self.clusters = clusters
+                self.couriers = couriers
+                self.restaurants = restaurants
+                self.restaurants_tags = restaurants_tags
+                self.time = time
+                self.labels = labels
+                self.centroids = centroids
+                return
+            if randseed != 0:
+                seed(randseed)
+            self.clusters = []
+            self.couriers = []
+            self.restaurants = []
+            self.restaurants_tags = []
+            self.time = start_time
+            for resNum, resType in zip(restaurant_array,self.resTypes):
+                for _ in range(resNum):
+                    self.restaurants.append(Restaurant(id=len(self.restaurants),
+                                                    grid_size=grid_size,
+                                                    type=resType,
+                                                    randseed=randint(1,10000)))
+                    self.restaurants_tags.append(resType)
+            self.restaurants = np.array(self.restaurants)
+            if filename is not None:
+                self.load(filename+".npz")
+            else:
+                self.init_clusters(start=start, epochs=epochs)
         for i in range(self.centroids.shape[0]):
             self.clusters.append(Cluster(self.restaurants[self.labels == i], self.centroids[i], id=i))
 
@@ -91,7 +108,7 @@ class Map():
         for res in self.restaurants:
             x_values.append(res.pos[0])
             y_values.append(res.pos[1])
-        plt.scatter(x_values, y_values,c=self.labels)
+        plt.scatter(x_values, y_values,c=self.labels, cmap='hsv')
 
 
     def display_map_types(self):

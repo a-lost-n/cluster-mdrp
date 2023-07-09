@@ -2,12 +2,11 @@ from src import *
 
 class Restaurant():
 
-  def __init__(self,id,grid_size,type='mid',randseed=0):
+  def __init__(self,id,grid_size,type='mid',randseed=0, x=0, y=0):
     self.id = id
-    if randseed != 0:
-      seed(randseed)
+    seed(randseed)
     self.grid_size = grid_size
-    self.pos = np.array([randint(0,grid_size),randint(0,grid_size)])
+    self.pos = np.array([randint(0,grid_size),randint(0,grid_size)]) if randseed != 0 else np.array([x,y])
     self.type = type
     self.active_orders = []
     match type:
