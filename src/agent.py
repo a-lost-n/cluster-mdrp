@@ -23,7 +23,7 @@ class Agent:
         self.memory = deque(maxlen=1024)
         self.gamma = 1
         self.epsilon_min = 0.01
-        self.learning_rate = 0.001
+        self.learning_rate = 0.01
         self.model = self._build_model()
         if filename: self.load(filename)
         self.target_model = self._build_model()
@@ -91,7 +91,7 @@ class Agent:
             reciever = action%(self.n_clusters-1)
             if reciever >= performer: reciever+=1
             if self.map.clusters[performer].can_relocate():
-                reward = -self.map.relocate_courier(performer,reciever)
+                reward = self.map.relocate_courier(performer,reciever)
             else:
                 reward = -1
             if verbose:
@@ -99,7 +99,7 @@ class Agent:
 
         elif action < self.n_clusters**2:
             cluster_id = action - (self.n_clusters**2 - self.n_clusters)
-            reward = -self.map.invoke_courier(cluster_id)
+            reward = self.map.invoke_courier(cluster_id)
             if verbose:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
@@ -155,7 +155,7 @@ class Agent:
         state = self.reset()[0]
         finished = False
         iterations = 0
-        while not finished and iterations < 2:
+        while not finished and iterations < 1:
             map_copy = self.map.copy()
             state, done = self.map.get_state()
             if done:
@@ -188,7 +188,7 @@ class Agent:
                 state = np.reshape(state, [1, self.state_size])
                 if epsilon > self.epsilon_min:
                     epsilon *= epsilon_decay
-
+            return 
             iterations += 1
             state = np.reshape(state, [1, self.state_size])
             while not done:
