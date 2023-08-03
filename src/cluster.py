@@ -32,7 +32,6 @@ class Cluster():
     courier = self.get_next_courier()
     order = self.active_orders.pop(0)
     courier.assign_order(order)
-    # return courier
   
   def assign_all_orders(self):
     while len(self.active_orders) > 0 and len(self.courier_list) > 0:

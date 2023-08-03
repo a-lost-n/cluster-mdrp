@@ -15,7 +15,7 @@ class Map():
             self.couriers = []
             self.restaurants = []
             self.restaurants_tags = []
-            rest_df = pd.read_csv("0o100t100s1p100/restaurants.txt", sep='\t', lineterminator='\n')
+            rest_df = pd.read_csv(filename, sep='\t', lineterminator='\n')
             for rest in rest_df.iterrows():
                 self.restaurants.append(Restaurant(id=len(self.restaurants),
                                                           grid_size=max(np.max(rest_df['x']),np.max(rest_df['y'])),

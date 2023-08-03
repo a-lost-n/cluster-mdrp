@@ -20,10 +20,10 @@ class Agent:
         self.n_clusters = len(self.map.clusters)
         self.state_size = 3*self.n_clusters 
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=1024)
+        self.memory = deque(maxlen=512)
         self.gamma = 0.9
         self.epsilon_min = 0.01
-        self.learning_rate = 0.01
+        self.learning_rate = 0.005
         self.model = self._build_model()
         if filename: self.load(filename)
         self.target_model = self._build_model()
@@ -55,6 +55,7 @@ class Agent:
         if return_value: return np.amax(act_values)
         return np.argmax(act_values)
 
+
     def fit(self, state, action, reward, next_state, done):
         target = self.model.predict(state, verbose=0)
         if done:
@@ -63,6 +64,7 @@ class Agent:
             Q_future = self.act(next_state, return_value=True)
             target[0][action] = reward + self.gamma * Q_future
         self.model.fit(state, target, epochs=1, verbose=0)
+
 
     def replay(self, batch_size):
         if len(self.memory) < batch_size:
@@ -81,6 +83,7 @@ class Agent:
         self.map.build_prediction()
         return self.map.get_state()
     
+
     def test_random(self):
         return random.randrange(self.action_size)
 
@@ -107,7 +110,7 @@ class Agent:
         return new_state, reward, done
 
 
-    def train(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
+    def train(self, episodes=1000, batch_size=16, epsilon=1.0, epsilon_decay=0.99, action_limit=50):
         reward_history = []
         for e in range(episodes):
             state, _ = self.reset()
@@ -121,7 +124,7 @@ class Agent:
                 state = np.reshape(state, [1, self.state_size])
                 run_actions = 0
                 run_rewards = 0
-                while not done and run_actions < 50:
+                while not done and run_actions < action_limit:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
                     reward = reward if not done else reward - COST_INVOCATION
@@ -141,14 +144,16 @@ class Agent:
                 _, finished = self.map.pass_time()
 
 
+
             self.update_target_model()
             print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
                             .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
             if epsilon > self.epsilon_min:
                 epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
-            
+            tf.keras.backend.clear_session()
         return reward_history
+
 
     def train_by_timestamp(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
         reward_history = []
@@ -202,6 +207,7 @@ class Agent:
             
         return reward_history
 
+
     def test(self):
         finished = False
         accumulated_reward = 0
@@ -218,6 +224,7 @@ class Agent:
                 accumulated_reward += reward
 
             _, finished = self.map.pass_time()
+
 
     def test_step(self, state, action, verbose=False):
         if action < self.n_clusters**2 - self.n_clusters:
@@ -245,6 +252,7 @@ class Agent:
         for i in range(0,self.state_size,3):
             done = done and (state[0][i+1] <= (state[0][i] + state[0][i+2]))
         return state, reward, done
+
 
     def test_state(self, state):
         accumulated_reward = 0
