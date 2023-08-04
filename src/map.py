@@ -25,6 +25,7 @@ class Map():
                 self.restaurants_tags.append('mid')
             self.restaurants = np.array(self.restaurants)
             self.init_clusters(start=start, epochs=epochs)
+            
         else:
             if clusters is not None and couriers is not None:
                 self.clusters = clusters

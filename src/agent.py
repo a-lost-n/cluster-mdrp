@@ -25,7 +25,7 @@ class Agent:
         self.epsilon_min = 0.01
         self.learning_rate = 0.005
         self.model = self._build_model()
-        if filename: self.load(filename)
+        if filename: self.model.load_weights(filename+".h5")
         self.target_model = self._build_model()
 
 
@@ -266,3 +266,8 @@ class Agent:
             state = next_state
             accumulated_reward += reward
         print("score: {:.2f}".format(accumulated_reward))
+
+
+    def save(self, name):
+        self.model.save_weights(name+".h5")
+        self.map.save(name+".npz")
