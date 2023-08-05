@@ -3,3 +3,4 @@ train:
 
 clean:
 	rm -f *model*
+	rm -f slurm*

@@ -20,7 +20,7 @@ class Agent:
         self.n_clusters = len(self.map.clusters)
         self.state_size = 3*self.n_clusters 
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=512)
+        self.memory = deque(maxlen=1024)
         self.gamma = 0.9
         self.epsilon_min = 0.01
         self.learning_rate = 0.005
@@ -42,7 +42,7 @@ class Agent:
         self.memory.append((state, action, reward, next_state, done))
 
 
-    def act(self, state, epsilon=0, return_value=False):
+    def act(self, state, epsilon=0, return_value=False, use_target=False):
         possible_actions = [*range(self.action_size)]
         for i in range(0, self.state_size, 3):
             if state[0][i] == 0:
@@ -50,7 +50,7 @@ class Agent:
                     possible_actions.remove(i*2/3 + j)
         if np.random.rand() <= epsilon:
             return random.choice(possible_actions)
-        act_values = self.model.predict(state, verbose=0)
+        act_values = self.target_model.predict(state, verbose=0) if use_target else self.model.predict(state, verbose=0)
         act_values = [act_values[0][i] if i in possible_actions else -np.Infinity for i in range(len(act_values[0]))]
         if return_value: return np.amax(act_values)
         return np.argmax(act_values)
@@ -61,7 +61,7 @@ class Agent:
         if done:
             target[0][action] = reward
         else:
-            Q_future = self.act(next_state, return_value=True)
+            Q_future = self.act(next_state, return_value=True, use_target=True)
             target[0][action] = reward + self.gamma * Q_future
         self.model.fit(state, target, epochs=1, verbose=0)
 
@@ -133,9 +133,8 @@ class Agent:
                     state = next_state
                     run_actions += 1
                     run_rewards += reward
-                self.replay(batch_size)
-                if count % 24 == 0:
-                    print("{}, t: {:.3f}s".format(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time))
+                # if count % 24 == 0:
+                    # print("{}, t: {:.3f}s".format(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time))
                     # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
                     #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
                 total_actions += run_actions
@@ -145,7 +144,8 @@ class Agent:
 
 
 
-            self.update_target_model()
+            self.replay(batch_size)
+            if episodes % 10 == 9: self.update_target_model()
             print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
                             .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
             if epsilon > self.epsilon_min:
