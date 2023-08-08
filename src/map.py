@@ -267,7 +267,7 @@ class Map():
         courier.state = "relocating"
         courier.relocation = to_cluster.id
         to_cluster.set_incoming(courier)
-        return -np.linalg.norm(courier.pos - to_cluster.centroid)
+        return np.linalg.norm(courier.pos - to_cluster.centroid)*COST_TRANSLATION_PER_TRAVEL_UNIT
         
 
     def get_empty_clusters(self):

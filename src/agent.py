@@ -20,10 +20,10 @@ class Agent:
         self.n_clusters = len(self.map.clusters)
         self.state_size = 3*self.n_clusters 
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=1024)
-        self.gamma = 0.9
+        self.memory = deque(maxlen=2048)
+        self.gamma = 0.999
         self.epsilon_min = 0.01
-        self.learning_rate = 0.005
+        self.learning_rate = 0.0025
         self.model = self._build_model()
         if filename: self.model.load_weights(filename+".h5")
         self.target_model = self._build_model()
@@ -31,9 +31,10 @@ class Agent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(self.state_size, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(self.state_size, activation='relu'))
-        model.add(Dense(self.action_size, activation='linear'))
+        model.add(Dense(512, input_dim=self.state_size, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(256, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(64, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(self.action_size, activation='linear', kernel_initializer='he_uniform'))
         model.compile(loss='huber', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
@@ -56,22 +57,27 @@ class Agent:
         return np.argmax(act_values)
 
 
-    def fit(self, state, action, reward, next_state, done):
+    def fit(self, state, action, reward, next_state, done, verbose=False):
         target = self.model.predict(state, verbose=0)
+        if verbose:
+            print("[REAL]: ", target[0])
         if done:
             target[0][action] = reward
         else:
             Q_future = self.act(next_state, return_value=True, use_target=True)
             target[0][action] = reward + self.gamma * Q_future
+        if verbose:
+            print("[PREDICTED]: ", target[0])
+
         self.model.fit(state, target, epochs=1, verbose=0)
 
 
-    def replay(self, batch_size):
+    def replay(self, batch_size, verbose=False):
         if len(self.memory) < batch_size:
             return
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
-            self.fit(state, action, reward, next_state, done)
+            self.fit(state, action, reward, next_state, done, verbose)
 
 
     def update_target_model(self):
@@ -110,8 +116,10 @@ class Agent:
         return new_state, reward, done
 
 
-    def train(self, episodes=1000, batch_size=16, epsilon=1.0, epsilon_decay=0.99, action_limit=50):
+    def train(self, episodes, finished_episodes=0, batch_size=16, epsilon=1.0, epsilon_decay=0.99, action_limit=256, verbose=False):
         reward_history = []
+        if finished_episodes != 0:
+            epsilon= epsilon_decay**finished_episodes
         for e in range(episodes):
             state, _ = self.reset()
             start_time = time.time()
@@ -119,35 +127,28 @@ class Agent:
             accumulated_reward = 0
             total_actions = 0
             count = 0
-            while not finished:
+            episode_actions = 0
+            while not finished and total_actions < action_limit:
                 state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
-                run_actions = 0
                 run_rewards = 0
-                while not done and run_actions < action_limit:
+                while not done and total_actions < action_limit:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward - COST_INVOCATION
+                    reward = reward if not done else reward + 1
                     next_state = np.reshape(next_state, [1, self.state_size])
                     self.remember(state, action, reward, next_state, done)
                     state = next_state
-                    run_actions += 1
+                    total_actions += 1
                     run_rewards += reward
-                # if count % 24 == 0:
-                    # print("{}, t: {:.3f}s".format(np.reshape(state, (self.state_size,1)).tolist(), time.time()-start_time))
-                    # print("actions: {}, reward: {:.2f}, e: {:.3f}, t: {:.4f}s"
-                    #       .format(run_actions, run_rewards, epsilon, time.time() - start_time))
-                total_actions += run_actions
                 accumulated_reward += run_rewards
                 count += 1
                 _, finished = self.map.pass_time()
 
-
-
-            self.replay(batch_size)
+            self.replay(batch_size, verbose=verbose)
             if episodes % 10 == 9: self.update_target_model()
             print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
-                            .format(e+1, episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
+                            .format(e+1+finished_episodes, episodes+finished_episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
             if epsilon > self.epsilon_min:
                 epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
@@ -233,11 +234,11 @@ class Agent:
             if reciever >= performer: 
                 reciever+=1
             if state[0][performer*3] > 0:
-                reward = np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)/COST_INVOCATION
+                reward = np.linalg.norm(self.map.clusters[performer].centroid - self.map.clusters[reciever].centroid)*COST_TRANSLATION_PER_TRAVEL_UNIT
                 state[0][performer*3] -= 1
                 state[0][reciever*3 + 2] += 1
             else:
-                reward = -1
+                reward = COST_INVOCATION
             if verbose:
                 print("[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
 
