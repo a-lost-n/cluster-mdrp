@@ -20,8 +20,8 @@ class Agent:
         self.n_clusters = len(self.map.clusters)
         self.state_size = 3*self.n_clusters 
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=2048)
-        self.gamma = 0.999
+        self.memory = deque(maxlen=4096)
+        self.gamma = 1
         self.epsilon_min = 0.01
         self.learning_rate = 0.0025
         self.model = self._build_model()
@@ -31,9 +31,8 @@ class Agent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(512, input_dim=self.state_size, activation='relu', kernel_initializer='he_uniform'))
-        model.add(Dense(256, activation='relu', kernel_initializer='he_uniform'))
-        model.add(Dense(64, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(self.action_size*self.state_size, input_dim=self.state_size, activation='linear', kernel_initializer='he_uniform'))
+        # model.add(Dense(self.action_size*3, activation='linear', kernel_initializer='he_uniform'))
         model.add(Dense(self.action_size, activation='linear', kernel_initializer='he_uniform'))
         model.compile(loss='huber', optimizer=Adam(learning_rate=self.learning_rate))
         return model
@@ -113,10 +112,12 @@ class Agent:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
         new_state, done = self.map.get_state()
+        reward = reward if not done else reward + 1
         return new_state, reward, done
 
 
-    def train(self, episodes, finished_episodes=0, batch_size=16, epsilon=1.0, epsilon_decay=0.99, action_limit=256, verbose=False):
+    def train(self, episodes, finished_episodes=0, batch_size=16, epsilon=1.0, epsilon_decay=0.99,
+                action_limit=256, score_limit=-70, verbose=False):
         reward_history = []
         if finished_episodes != 0:
             epsilon= epsilon_decay**finished_episodes
@@ -126,29 +127,24 @@ class Agent:
             finished = False
             accumulated_reward = 0
             total_actions = 0
-            count = 0
-            episode_actions = 0
-            while not finished and total_actions < action_limit:
+            while not finished and accumulated_reward > score_limit:
                 state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
-                run_rewards = 0
-                while not done and total_actions < action_limit:
+                while not done and accumulated_reward > score_limit:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 1
                     next_state = np.reshape(next_state, [1, self.state_size])
                     self.remember(state, action, reward, next_state, done)
                     state = next_state
                     total_actions += 1
-                    run_rewards += reward
-                accumulated_reward += run_rewards
-                count += 1
+                    accumulated_reward += reward if not done else reward - 1
                 _, finished = self.map.pass_time()
 
             self.replay(batch_size, verbose=verbose)
             if episodes % 10 == 9: self.update_target_model()
-            print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, t: {:.2f}s"
-                            .format(e+1+finished_episodes, episodes+finished_episodes, accumulated_reward, epsilon, total_actions, time.time() - start_time))
+            print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, couriers: {}, t: {:.2f}s"
+                            .format(e+1+finished_episodes, episodes+finished_episodes, accumulated_reward,
+                                     epsilon, total_actions, len(self.map.couriers), time.time() - start_time))
             if epsilon > self.epsilon_min:
                 epsilon *= epsilon_decay
             reward_history.append(accumulated_reward)
@@ -156,7 +152,7 @@ class Agent:
         return reward_history
 
 
-    def train_by_timestamp(self, episodes=1000, batch_size = 16, epsilon = 1.0, epsilon_decay=0.99):
+    def train_by_timestamp(self, episodes=200, batch_size = 16, epsilon = 1.0, epsilon_decay=0.999):
         reward_history = []
         state = self.reset()[0]
         finished = False
@@ -174,17 +170,15 @@ class Agent:
                 while not done and run_actions < 50:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
-                    reward = reward if not done else reward + 1
+                    # reward = reward if not done else reward + 10
                     next_state = np.reshape(next_state, [1, self.state_size])
                     self.remember(state, action, reward, next_state, done)
                     state = next_state
                     run_actions += 1
                     run_rewards += reward
                 
-                # if run_rewards > -50:
-                # _, finished = self.map.pass_time()
                 self.replay(batch_size)
-                if e%10 == 0:
+                if e%5 == 4:
                     self.update_target_model()
                 if e % (episodes/10) == 0:
                     print(np.reshape(state, (self.state_size,1)).tolist())
@@ -272,3 +266,11 @@ class Agent:
     def save(self, name):
         self.model.save_weights(name+".h5")
         self.map.save(name+".npz")
+
+
+    def print_prediction(self, state):
+        prediction = self.model.predict(state, verbose=False)[0]
+        print("|      | Invo |  C1  |  C2  |  C3  |")
+        print("|  C1  |{:.4f}|  --  |{:.4f}|{:.4f}|".format(prediction[6], prediction[0], prediction[1]))
+        print("|  C2  |{:.4f}|{:.4f}|  --  |{:.4f}|".format(prediction[7], prediction[2], prediction[3]))
+        print("|  C3  |{:.4f}|{:.4f}|{:.4f}|  --  |".format(prediction[8], prediction[4], prediction[5]))
