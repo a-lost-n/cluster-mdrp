@@ -257,6 +257,8 @@ class Map():
         done = self.time == datetime.time(22,0,0)
         return reward, done
 
+    def dist(self, p1, p2):
+        return np.linalg.norm(p1 - p2)*COST_TRANSLATION_PER_TRAVEL_UNIT
 
     def relocate_courier(self, from_cluster, to_cluster):
         from_cluster = self.clusters[from_cluster]
@@ -267,7 +269,7 @@ class Map():
         courier.state = "relocating"
         courier.relocation = to_cluster.id
         to_cluster.set_incoming(courier)
-        return np.linalg.norm(courier.pos - to_cluster.centroid)*COST_TRANSLATION_PER_TRAVEL_UNIT
+        return self.dist(courier.pos, to_cluster.centroid)
         
 
     def get_empty_clusters(self):

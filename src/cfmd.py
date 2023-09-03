@@ -59,3 +59,9 @@ def kmeans_min_members(data, k, min_members, max_iterations=100):
 
     return labels, centroids, inertia
 
+import psutil
+
+def get_memory_usage():
+    process = psutil.Process()
+    memory_usage = process.memory_info().rss / 1024 / 1024
+    print(f"Memory usage at the end: {memory_usage:.2f} MB")
