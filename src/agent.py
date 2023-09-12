@@ -20,23 +20,22 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 
 class Agent:
-    def __init__(self, restaurant_array, grid_size=100, randseed=0, filename=None):
+    def __init__(self, restaurant_array, learning_rate=0.001, grid_size=100, randseed=0, filename=None):
         self.map = Map(restaurant_array=restaurant_array,
                        grid_size=grid_size, randseed=randseed, filename=filename)
         self.n_clusters = len(self.map.clusters)
         self.reward_history = []
         self.state_size = 3*self.n_clusters
         self.action_size = self.n_clusters**2
-        self.memory = deque(maxlen=50_000)
+        self.memory = ReplayMemory(capacity=50_000)
         self.gamma = 1
         self.epsilon_min = 0.01
-        self.learning_rate = 0.001
+        self.learning_rate = learning_rate
         self.model = self._build_model()
         if filename:
             self.model.load_weights(filename+".h5")
         self.target_model = self._build_model()
-        self.pre_train(epochs=1000)
-        self.update_target_model()
+        self.pre_train(epochs=2000)
 
     def ReLNU(self, x):
         return K.minimum(-x, 1)
@@ -50,7 +49,7 @@ class Agent:
 
         model.add(Dense(self.action_size*self.state_size/3, activation='relu'))
 
-        model.add(Dense(self.action_size, activation=self.ReLNU))
+        model.add(Dense(self.action_size, activation='relu'))
 
         model.compile(loss='huber', optimizer=Adam(
             learning_rate=self.learning_rate))
@@ -73,10 +72,10 @@ class Agent:
             reloc_size = self.n_clusters*(self.n_clusters - 1)
             j = 0
             while j < reloc_size:
-                action[j] = -2
+                action[j] = 2
                 j += 1
             while j < self.action_size:
-                action[j] = -1 + dist_matrix[i][j - reloc_size]
+                action[j] = 1 + dist_matrix[i][j - reloc_size]
                 j += 1
             states.append(state)
             actions.append(action)
@@ -86,7 +85,7 @@ class Agent:
         self.update_target_model()
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        self.memory.add(state, action, reward, next_state, done)
 
     def act(self, state, epsilon=0, return_value=False, use_target=False):
         if np.random.rand() <= epsilon:
@@ -96,29 +95,38 @@ class Agent:
         else:
             act_values = self.model.predict(state, verbose=0)
         if return_value:
-            return np.amax(act_values)
-        return np.argmax(act_values)
+            return np.amin(act_values)
+        return np.argmin(act_values)
 
     def fit(self, state, action, reward, next_state, done, verbose=False):
         target = self.model.predict(state, verbose=0)
         if verbose:
+            print("[STATE]", state)
             print("[REAL]: ", target[0])
+            print("[TARGET]", self.target_model.predict(state, verbose=0))
         if done:
+            error = np.abs(target[0][action]-reward)
             target[0][action] = reward
         else:
             Q_future = self.act(next_state, return_value=True, use_target=True)
-            target[0][action] = reward + self.gamma * Q_future
+            bellman_eq = reward + self.gamma * Q_future
+            error = np.abs(target[0][action] - bellman_eq)
+            target[0][action] = bellman_eq
         if verbose:
-            print("[PREDICTED]: ", target[0])
+            print("[PREDICTED]: ", target[0], '\n')
 
         self.model.fit(state, target, epochs=1, verbose=0)
+        return error
 
     def replay(self, batch_size, verbose=False):
-        if len(self.memory) < batch_size:
+        if self.memory.size() < batch_size:
             return
-        minibatch = random.sample(self.memory, batch_size)
+        indices, minibatch, _ = self.memory.sample(batch_size)
+        errors = []
         for state, action, reward, next_state, done in minibatch:
-            self.fit(state, action, reward, next_state, done, verbose)
+            errors.append(self.fit(state, action, reward,
+                          next_state, done, verbose))
+        self.memory.update_priority(indices, errors)
 
     def update_target_model(self):
         self.target_model.set_weights(self.model.get_weights())
@@ -140,7 +148,7 @@ class Agent:
             if self.map.clusters[performer].can_relocate():
                 reward = self.map.relocate_courier(performer, reciever)
             else:
-                reward = -1.1
+                reward = COST_INVOCATION*1.1
             if verbose:
                 print(
                     "[ACTION]: C_{} -> C_{}, R: {}".format(performer, reciever, reward))
@@ -152,11 +160,10 @@ class Agent:
                 print("[ACTION]: C_{}++, R: {}".format(cluster_id, reward))
 
         new_state, done = self.map.get_state()
-        reward = reward if not done else reward + 1
         return new_state, reward, done
 
     def train(self, episodes, finished_episodes=0, batch_size=16, epsilon=1.0, epsilon_decay=0.99,
-              score_limit=-1000, refresh_rate=10, verbose=False, log=True, log_limit=-200, train_model=True, display_rewards=False):
+              score_limit=1000, refresh_rate=10, verbose=False, log=True, log_limit=-200, train_model=True, display_rewards=False):
         if finished_episodes != 0:
             epsilon = epsilon_decay**finished_episodes
         for e in range(episodes):
@@ -165,10 +172,10 @@ class Agent:
             finished = False
             accumulated_reward = 0
             total_actions = 0
-            while not finished and accumulated_reward > score_limit:
+            while not finished and accumulated_reward < score_limit:
                 state, done = self.map.get_state()
                 state = np.reshape(state, [1, self.state_size])
-                while not done and accumulated_reward > score_limit:
+                while not done and accumulated_reward < score_limit:
                     action = self.act(state, epsilon)
                     next_state, reward, done = self.step(action)
                     next_state = np.reshape(next_state, [1, self.state_size])
@@ -176,14 +183,14 @@ class Agent:
                         self.remember(state, action, reward, next_state, done)
                     state = next_state
                     total_actions += 1
-                    accumulated_reward += reward if not done else reward - 1
+                    accumulated_reward += reward
                 _, finished = self.map.pass_time()
 
             if train_model:
                 self.replay(batch_size, verbose=verbose)
             if episodes % refresh_rate == refresh_rate-1:
                 self.update_target_model()
-            if log and accumulated_reward > log_limit:
+            if log and accumulated_reward < log_limit:
                 print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, couriers: {}, t: {:.2f}s"
                       .format(e+1+finished_episodes, episodes+finished_episodes, accumulated_reward,
                               epsilon, total_actions, len(self.map.couriers), time.time() - start_time))
@@ -194,7 +201,7 @@ class Agent:
                 self.rewards_graphic()
             tf.keras.backend.clear_session()
 
-    def rewards_graphic(self, n, mean=0, ylim=-200):
+    def rewards_graphic(self, n, mean=0, ylim=200):
         if mean == 0:
             mean = np.mean(grouped_rewards)
         grouped_rewards = np.mean(

@@ -6,4 +6,5 @@ from src.courier import Courier
 from src.restaurant import Restaurant
 from src.cluster import Cluster
 from src.map import Map
+from src.memory import ReplayMemory
 from src.agent import Agent
