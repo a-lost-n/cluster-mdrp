@@ -1,6 +1,6 @@
 from .utils.consts import *
 
-from src.cfmd import nextStamp, optimal_kmeans_dist, calculateDelay, get_memory_usage
+from src.cfmd import nextStamp, optimal_kmeans_dist, kmeans_min_members, calculateDelay, get_memory_usage
 from src.order import Order
 from src.courier import Courier
 from src.restaurant import Restaurant
