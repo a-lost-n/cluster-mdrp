@@ -6,7 +6,7 @@ import os
 import matplotlib.pyplot as plt
 from collections import deque
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, LeakyReLU
+from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import initializers
 from IPython.display import display, clear_output
@@ -21,7 +21,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 class Agent:
     def __init__(self, restaurant_array=None, learning_rate=0.001, grid_size=100, randseed=0, map_file=None, filename=None,
-                 num_clusters=None, pre_train=True, name=None):
+                 num_clusters=None, pre_train=True, name=None, model=None):
         self.map = Map(restaurant_array=restaurant_array,
                        grid_size=grid_size, randseed=randseed, import_dir=map_file,
                        num_clusters=num_clusters, filename=filename)
@@ -34,28 +34,29 @@ class Agent:
         self.action_size = self.n_clusters**2
         self.memory = ReplayMemory(capacity=10_000)
         self.gamma = 1
-        self.epsilon_min = 0.01
+        self.epsilon_min = 0
         self.learning_rate = learning_rate
         self.min_score = np.inf
         self.name = name
-        self.model = self._build_model()
+        self.model = self._build_model(model())
         if filename:
             self.model.load_weights(filename+".h5")
-        self.target_model = self._build_model()
+        self.target_model = self._build_model(model())
         if pre_train:
             self.pre_train(epochs=2000)
 
-    def _build_model(self):
-        model = Sequential()
-        model.add(Dense(self.action_size*self.state_size*3,
-                  input_dim=self.state_size, activation='relu'))
+    def _build_model(self, model):
+        if not model:
+            model = Sequential()
+            model.add(Dense(self.action_size*self.state_size*3,
+                            input_dim=self.state_size, activation='relu'))
 
-        model.add(Dense(self.action_size*self.state_size, activation='relu'))
+            model.add(Dense(self.action_size*self.state_size, activation='relu'))
 
-        model.add(Dense(self.action_size*self.state_size/3, activation='relu'))
-        # model.add(Dense(self.action_size*self.state_size/3, activation='relu'))
+            model.add(Dense(self.action_size *
+                      self.state_size/3, activation='relu'))
 
-        model.add(Dense(self.action_size, activation='linear'))
+            model.add(Dense(self.action_size, activation='linear'))
 
         model.compile(loss='huber', optimizer=Adam(
             learning_rate=self.learning_rate))
@@ -192,7 +193,7 @@ class Agent:
 
     def train(self, episodes, finished_episodes=0, batch_size=16, epsilon=1.0, epsilon_decay=0.99,
               score_limit=120, refresh_rate=10, verbose=False, log=True, train_model=True,
-              display_rewards=False, block_impossible_actions=True):
+              block_impossible_actions=True, run_test=True):
         if finished_episodes != 0:
             epsilon = epsilon_decay**finished_episodes
         for e in range(episodes):
@@ -219,35 +220,43 @@ class Agent:
                 orders_made += orders_count
 
             if train_model:
+                if log:
+                    print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, couriers: {}, orders: {}, t: {:.2f}s"
+                          .format(e+1+finished_episodes, episodes+finished_episodes, accumulated_reward,
+                                  epsilon, total_actions, len(self.map.couriers), orders_made, time.time() - start_time))
                 self.replay(batch_size, verbose=verbose,
                             block_impossible_actions=block_impossible_actions)
-            if episodes % refresh_rate == refresh_rate-1:
-                self.update_target_model()
-            if log:
-                print("episode: {}/{}, score: {:.2f}, e: {:.2f}, actions: {}, couriers: {}, orders: {}, t: {:.2f}s"
-                      .format(e+1+finished_episodes, episodes+finished_episodes, accumulated_reward,
-                              epsilon, total_actions, len(self.map.couriers), orders_made, time.time() - start_time))
-            if epsilon > self.epsilon_min:
-                epsilon *= epsilon_decay
-            self.reward_history.append(accumulated_reward)
-            self.courier_size_history.append(len(self.map.couriers))
-            self.order_size_history.append(orders_made)
-            if display_rewards:
-                self.rewards_graphic()
-            if train_model:
-                self.test(limit=score_limit)
-                if self.test_reward_history[-1] < self.min_score:
-                    self.min_score = self.test_reward_history[-1]
-                    self.save()
+                if episodes % refresh_rate == refresh_rate-1:
+                    self.update_target_model()
+                if epsilon > self.epsilon_min:
+                    epsilon *= epsilon_decay
+                self.reward_history.append(accumulated_reward)
+                self.courier_size_history.append(len(self.map.couriers))
+                self.order_size_history.append(orders_made)
+                if run_test:
+                    self.train(episodes=1, train_model=False, epsilon=0, score_limit=score_limit,
+                            log=log, block_impossible_actions=block_impossible_actions)
+                    if self.test_reward_history[-1] < self.min_score:
+                        self.min_score = self.test_reward_history[-1]
+                        self.save()
+                else:
+                    if self.reward_history[-1] < self.min_score:
+                        self.min_score = self.reward_history[-1]
+                        self.save()
+            else:
+                if log:
+                    print("[TEST] score: {:.2f}, actions: {}, couriers: {}, orders: {}, t: {:.2f}s"
+                          .format(accumulated_reward, total_actions, len(self.map.couriers), orders_made, time.time() - start_time))
+                self.test_reward_history.append(accumulated_reward)
             tf.keras.backend.clear_session()
 
     def rewards_graphic(self, n, mean=0, ylim=200):
-        if mean == 0:
-            mean = np.mean(grouped_rewards)
         grouped_rewards = np.mean(
             np.array(self.reward_history).reshape(-1, n), axis=1)
         test_grouped_rewards = np.mean(
             np.array(self.test_reward_history).reshape(-1, n), axis=1)
+        if mean == 0:
+            mean = np.mean(grouped_rewards)
         plt.plot(np.arange(0, len(self.reward_history), n),
                  grouped_rewards, color='blue')
         plt.plot(np.arange(0, len(self.test_reward_history), n),
@@ -257,34 +266,18 @@ class Agent:
         plt.axhline(y=mean, color='r', linestyle='--')
         plt.show()
 
-    def test(self, limit, verbose=False):
-        start_time = time.time()
-        finished = False
-        accumulated_reward = 0
-        total_actions = 0
-        orders_made = 0
-        state = self.reset()[0]
-        while not finished and accumulated_reward < limit:
-            state, done = self.map.get_state()
-            state = np.reshape(state, [1, self.state_size])
-            while not done and accumulated_reward < limit:
-                if verbose:
-                    print("[STATE]: ", np.reshape(
-                        state, (self.state_size, 1)).tolist())
-                action = self.act(state, epsilon=0,
-                                  block_impossible_actions=True)
-                next_state, reward, done = self.step(action, verbose=verbose)
-                next_state = np.reshape(next_state, [1, self.state_size])
-                state = next_state
-                total_actions += 1
-                accumulated_reward += reward
+    def test(self, episodes, score_limit=250):
+        self.train(episodes=episodes, train_model=False,
+                   epsilon=0, score_limit=score_limit, log=False)
+        self.test_reward_history = np.array(self.test_reward_history)
+        print(f"Percentil {50}: {np.percentile(self.test_reward_history, 50)}")
+        print(f"Percentil {75}: {np.percentile(self.test_reward_history, 75)}")
+        print(f"Percentil {90}: {np.percentile(self.test_reward_history, 90)}")
+        print(f"Percentil {95}: {np.percentile(self.test_reward_history, 95)}")
+        plt.hist(self.test_reward_history, range=[20, 260], bins=20)
 
-            _, finished, orders_count = self.map.pass_time()
-            orders_made += orders_count
-        print("[TEST] score: {:.2f}, actions: {}, couriers: {}, orders: {}, t: {:.2f}s"
-              .format(accumulated_reward, total_actions, len(self.map.couriers), orders_made, time.time() - start_time))
-        self.test_reward_history.append(accumulated_reward)
-
-    def save(self):
-        self.model.save_weights(self.name+".h5")
-        self.map.save(self.name+".npz")
+    def save(self, name=None):
+        if not name:
+            name = self.name
+        self.model.save_weights(name+".h5")
+        self.map.save(name+".npz")
