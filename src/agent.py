@@ -39,7 +39,7 @@ class Agent:
         self.min_score = np.inf
         self.name = name
         self.model = self._build_model(model())
-        if filename:
+        if filename and not pre_train:
             self.model.load_weights(filename+".h5")
         self.target_model = self._build_model(model())
         if pre_train:
@@ -248,6 +248,8 @@ class Agent:
                     print("[TEST] score: {:.2f}, actions: {}, couriers: {}, orders: {}, t: {:.2f}s"
                           .format(accumulated_reward, total_actions, len(self.map.couriers), orders_made, time.time() - start_time))
                 self.test_reward_history.append(accumulated_reward)
+                self.courier_size_history.append(len(self.map.couriers))
+                self.order_size_history.append(orders_made)
             tf.keras.backend.clear_session()
 
     def rewards_graphic(self, n, mean=0, ylim=200):
@@ -274,6 +276,7 @@ class Agent:
         print(f"Percentil {75}: {np.percentile(self.test_reward_history, 75)}")
         print(f"Percentil {90}: {np.percentile(self.test_reward_history, 90)}")
         print(f"Percentil {95}: {np.percentile(self.test_reward_history, 95)}")
+        print(f"Percentil {99}: {np.percentile(self.test_reward_history, 99)}")
         plt.hist(self.test_reward_history, range=[20, 260], bins=20)
 
     def save(self, name=None):

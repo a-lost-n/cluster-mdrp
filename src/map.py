@@ -50,7 +50,7 @@ class Map():
                 self.load(filename+".npz")
             else:
                 self.init_clusters(start=start, epochs=epochs,
-                                   num_clusters=num_clusters)
+                                num_clusters=num_clusters)
 
         else:
             if clusters is not None and couriers is not None:
@@ -139,7 +139,7 @@ class Map():
         for res in self.restaurants:
             x_values.append(res.pos[0])
             y_values.append(res.pos[1])
-        plt.scatter(x_values, y_values, c=self.labels, cmap='hsv')
+        plt.scatter(x_values, y_values, c=self.labels)
 
     def display_map_types(self):
         x_values = []
